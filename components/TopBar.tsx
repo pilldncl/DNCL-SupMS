@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 
 interface TopBarProps {
   onSearch?: (query: string) => void
@@ -10,7 +11,41 @@ interface TopBarProps {
 export function TopBar({ onSearch }: TopBarProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [isMobile, setIsMobile] = useState(false)
+  const [user, setUser] = useState<any>(null)
+  const [showUserMenu, setShowUserMenu] = useState(false)
   const router = useRouter()
+
+  useEffect(() => {
+    // Check if window is available (client-side only)
+    if (typeof window === 'undefined') return
+    
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768)
+    }
+    
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      setUser(user)
+
+      // Listen for auth changes
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        setUser(session?.user ?? null)
+      })
+
+      return () => {
+        subscription.unsubscribe()
+      }
+    }
+
+    loadUser()
+  }, [])
 
   useEffect(() => {
     // Check if window is available (client-side only)
@@ -32,6 +67,13 @@ export function TopBar({ onSearch }: TopBarProps) {
     } else {
       router.push(`/order-list?search=${encodeURIComponent(searchQuery)}`)
     }
+  }
+
+  const handleSignOut = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/auth/sign-in')
+    router.refresh()
   }
 
   return (
@@ -93,6 +135,103 @@ export function TopBar({ onSearch }: TopBarProps) {
           </span>
         </div>
       </form>
+
+      {/* User Menu */}
+      {user && (
+        <div style={{ position: 'relative', marginLeft: '1rem' }}>
+          <button
+            onClick={() => setShowUserMenu(!showUserMenu)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.5rem 0.75rem',
+              backgroundColor: 'transparent',
+              border: '1px solid #e5e7eb',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+            }}
+          >
+            <div style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              backgroundColor: '#0070f3',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              fontWeight: '600',
+            }}>
+              {user.email?.[0]?.toUpperCase() || 'U'}
+            </div>
+            <span style={{ display: isMobile ? 'none' : 'block' }}>
+              {user.email || 'User'}
+            </span>
+            <span style={{ fontSize: '0.75rem' }}>▼</span>
+          </button>
+
+          {showUserMenu && (
+            <>
+              <div
+                onClick={() => setShowUserMenu(false)}
+                style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  zIndex: 999,
+                }}
+              />
+              <div style={{
+                position: 'absolute',
+                top: 'calc(100% + 0.5rem)',
+                right: 0,
+                backgroundColor: 'white',
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                minWidth: '200px',
+                zIndex: 1000,
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  padding: '0.75rem 1rem',
+                  borderBottom: '1px solid #e5e7eb',
+                  fontSize: '0.75rem',
+                  color: '#6b7280',
+                }}>
+                  {user.email}
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem 1rem',
+                    textAlign: 'left',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    color: '#dc2626',
+                    transition: 'background-color 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#fee2e2'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent'
+                  }}
+                >
+                  Sign Out
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </header>
   )
 }
