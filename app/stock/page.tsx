@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { StockService, SKUService, PartTypesService } from '@/lib/services'
 import type { StockItem, SKU, PartType } from '@/lib/types/supply'
 import { Sidebar } from '@/components/Sidebar'
@@ -8,6 +9,7 @@ import { TopBar } from '@/components/TopBar'
 import { UpdateStockModal } from '@/components/UpdateStockModal'
 import { SKUAutocomplete } from '@/components/SKUAutocomplete'
 import { AddSKUModal } from '@/components/AddSKUModal'
+import { AddPartTypeModal } from '@/components/AddPartTypeModal'
 import { QuickAddStockForm } from '@/components/QuickAddStockForm'
 import { useMobile } from '@/lib/hooks/useMobile'
 
@@ -24,6 +26,7 @@ interface BulkEntryRow {
  */
 export default function StockPage() {
   const isMobile = useMobile()
+  const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<'view' | 'entry'>('view')
   const [stockItems, setStockItems] = useState<StockItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -44,8 +47,17 @@ export default function StockPage() {
   const [bulkError, setBulkError] = useState<string | null>(null)
   const [bulkSuccess, setBulkSuccess] = useState<string | null>(null)
   const [showAddSKUModal, setShowAddSKUModal] = useState(false)
+  const [showAddPartTypeModal, setShowAddPartTypeModal] = useState(false)
   const [skuToAddAfter, setSkuToAddAfter] = useState<number | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    // Read filter from URL query parameter
+    const filterParam = searchParams.get('filter')
+    if (filterParam === 'low' || filterParam === 'out') {
+      setFilter(filterParam)
+    }
+  }, [searchParams])
 
   useEffect(() => {
     loadStock()
@@ -119,6 +131,12 @@ export default function StockPage() {
     }
     setShowAddSKUModal(false)
     setSkuToAddAfter(null)
+  }
+
+  const handlePartTypeAdded = async (newPartType: PartType) => {
+    // Reload part types to include the new one
+    await loadPartTypes()
+    setShowAddPartTypeModal(false)
   }
 
   const handleBulkFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -731,7 +749,16 @@ export default function StockPage() {
                           <td style={{ padding: '1rem', borderRight: '1px solid #e5e7eb' }}>
                             <select
                               value={row.partType}
-                              onChange={(e) => updateBulkRow(index, 'partType', e.target.value)}
+                              onChange={(e) => {
+                                const value = e.target.value
+                                if (value === '__ADD_NEW__') {
+                                  setShowAddPartTypeModal(true)
+                                  // Reset to empty to keep dropdown in "Select..." state
+                                  updateBulkRow(index, 'partType', '')
+                                } else {
+                                  updateBulkRow(index, 'partType', value)
+                                }
+                              }}
                               disabled={bulkSubmitting || !row.selectedSKU}
                               style={{
                                 width: '100%',
@@ -746,6 +773,13 @@ export default function StockPage() {
                               {partTypes.map(pt => (
                                 <option key={pt.name} value={pt.name}>{pt.display_name}</option>
                               ))}
+                              <option value="__ADD_NEW__" style={{ 
+                                fontStyle: 'italic',
+                                color: '#0070f3',
+                                fontWeight: '500',
+                              }}>
+                                + Add New Part Type...
+                              </option>
                             </select>
                           </td>
                           <td style={{ padding: '1rem', borderRight: '1px solid #e5e7eb' }}>
@@ -900,6 +934,15 @@ export default function StockPage() {
               setSkuToAddAfter(null)
             }}
             onSKUAdded={handleSKUAdded}
+          />
+        )}
+
+        {/* Add Part Type Modal */}
+        {showAddPartTypeModal && (
+          <AddPartTypeModal
+            isOpen={showAddPartTypeModal}
+            onClose={() => setShowAddPartTypeModal(false)}
+            onPartTypeAdded={handlePartTypeAdded}
           />
         )}
       </main>

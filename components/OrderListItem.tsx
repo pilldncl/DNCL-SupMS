@@ -8,6 +8,8 @@ interface OrderListItemProps {
   onRemove: (itemId: string) => void
   onAddStock?: (item: OrderListItemType) => void // Optional callback when order arrives
   userId?: string
+  isSelected?: boolean
+  onSelect?: (itemId: string) => void
 }
 
 export function OrderListItem({ 
@@ -15,7 +17,9 @@ export function OrderListItem({
   onToggleOrdered, 
   onRemove,
   onAddStock,
-  userId 
+  userId,
+  isSelected = false,
+  onSelect
 }: OrderListItemProps) {
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onToggleOrdered(item.id, e.target.checked)
@@ -40,24 +44,45 @@ export function OrderListItem({
         display: 'flex',
         alignItems: 'center',
         padding: '1rem',
-        border: '1px solid #ddd',
-        borderRadius: '4px',
+        border: `1px solid ${isSelected ? '#0070f3' : '#ddd'}`,
+        borderRadius: '8px',
         marginBottom: '0.5rem',
-        backgroundColor: item.ordered ? '#f0f9ff' : '#fff',
+        backgroundColor: isSelected 
+          ? '#eff6ff' 
+          : item.ordered 
+            ? '#f0f9ff' 
+            : '#fff',
         opacity: item.ordered ? 0.7 : 1,
+        transition: 'all 0.2s',
       }}
     >
-      <input
-        type="checkbox"
-        checked={item.ordered}
-        onChange={handleCheckboxChange}
-        style={{
-          width: '20px',
-          height: '20px',
-          marginRight: '1rem',
-          cursor: 'pointer',
-        }}
-      />
+      {!item.ordered && onSelect && (
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onSelect(item.id)}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            width: '20px',
+            height: '20px',
+            marginRight: '1rem',
+            cursor: 'pointer',
+          }}
+        />
+      )}
+      {item.ordered && (
+        <input
+          type="checkbox"
+          checked={item.ordered}
+          onChange={handleCheckboxChange}
+          style={{
+            width: '20px',
+            height: '20px',
+            marginRight: '1rem',
+            cursor: 'pointer',
+          }}
+        />
+      )}
 
       <div style={{ flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>

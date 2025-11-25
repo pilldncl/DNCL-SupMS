@@ -219,6 +219,51 @@ export class OrderListService {
   }
 
   /**
+   * Update order list item quantity
+   */
+  static async updateItemQuantity(itemId: string, quantity?: number): Promise<OrderListItem> {
+    try {
+      const { data, error } = await supabase
+        .from('supply_order_items')
+        .update({
+          quantity: quantity || null,
+        })
+        .eq('id', itemId)
+        .select(`
+          *,
+          sku:sku_master!sku_id (*)
+        `)
+        .single()
+
+      if (error) {
+        console.error('Error updating item quantity:', error)
+        throw error
+      }
+
+      // Fetch part type display name
+      let partTypeDisplay = data.part_type
+      if (data.part_type) {
+        const { data: partTypeData } = await supabase
+          .from('supply_order_part_types')
+          .select('display_name')
+          .eq('name', data.part_type)
+          .single()
+        
+        partTypeDisplay = partTypeData?.display_name || data.part_type
+      }
+
+      return {
+        ...data,
+        sku: data.sku || undefined,
+        part_type_display: partTypeDisplay,
+      } as OrderListItem
+    } catch (error) {
+      console.error('Error in updateItemQuantity:', error)
+      throw error
+    }
+  }
+
+  /**
    * Remove item from order list
    */
   static async removeItem(itemId: string): Promise<void> {

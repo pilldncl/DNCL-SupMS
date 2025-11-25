@@ -388,5 +388,50 @@ export class StockService {
       throw error
     }
   }
+
+  /**
+   * Get latest arrivals (recently updated stock items)
+   */
+  static async getLatestArrivals(limit: number = 5): Promise<StockItem[]> {
+    try {
+      const { data, error } = await supabase
+        .from('supply_order_stock')
+        .select(`
+          *,
+          sku:sku_master!sku_id (*)
+        `)
+        .order('last_updated', { ascending: false })
+        .limit(limit)
+
+      if (error) {
+        console.error('Error fetching latest arrivals:', error)
+        throw error
+      }
+
+      // Fetch part type info separately
+      let partTypeMap = new Map<string, string>()
+      if (data && data.length > 0) {
+        const uniquePartTypes = Array.from(new Set(data.map((item: any) => item.part_type)))
+        const { data: partTypesData } = await supabase
+          .from('supply_order_part_types')
+          .select('name, display_name')
+          .in('name', uniquePartTypes)
+        
+        partTypeMap = new Map(
+          (partTypesData || []).map(pt => [pt.name, pt.display_name])
+        )
+      }
+
+      return (data || []).map((item: any) => ({
+        ...item,
+        sku: item.sku || undefined,
+        part_type_display: partTypeMap.get(item.part_type) || item.part_type,
+        is_low_stock: item.quantity <= item.low_stock_threshold,
+      })) as StockItem[]
+    } catch (error) {
+      console.error('Error in getLatestArrivals:', error)
+      throw error
+    }
+  }
 }
 

@@ -22,6 +22,8 @@ export default function OrderListPage() {
   const [showAddStockModal, setShowAddStockModal] = useState(false)
   const [selectedOrderItemForStock, setSelectedOrderItemForStock] = useState<OrderListItem | null>(null)
   const [weekCycleId, setWeekCycleId] = useState<string>('')
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
+  const [bulkUpdating, setBulkUpdating] = useState(false)
 
   const loadOrderList = async () => {
     setLoading(true)
@@ -106,6 +108,82 @@ export default function OrderListPage() {
     await loadOrderList() // Refresh to show any updates
   }
 
+  const handleSelectItem = (itemId: string) => {
+    setSelectedItems(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId)
+      } else {
+        newSet.add(itemId)
+      }
+      return newSet
+    })
+  }
+
+  const handleSelectAll = (itemIds: string[]) => {
+    if (selectedItems.size === itemIds.length) {
+      setSelectedItems(new Set())
+    } else {
+      setSelectedItems(new Set(itemIds))
+    }
+  }
+
+  const handleBulkMarkAsOrdered = async () => {
+    if (selectedItems.size === 0) return
+    
+    if (!confirm(`Mark ${selectedItems.size} item(s) as ordered?`)) return
+
+    setBulkUpdating(true)
+    try {
+      await Promise.all(
+        Array.from(selectedItems).map(id => OrderListService.markAsOrdered(id))
+      )
+      setSelectedItems(new Set())
+      await loadOrderList()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update items')
+    } finally {
+      setBulkUpdating(false)
+    }
+  }
+
+  const handleBulkRemove = async () => {
+    if (selectedItems.size === 0) return
+    
+    if (!confirm(`Remove ${selectedItems.size} item(s) from the order list?`)) return
+
+    setBulkUpdating(true)
+    try {
+      await Promise.all(
+        Array.from(selectedItems).map(id => OrderListService.removeItem(id))
+      )
+      setSelectedItems(new Set())
+      await loadOrderList()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove items')
+    } finally {
+      setBulkUpdating(false)
+    }
+  }
+
+  const handleMarkAllPendingAsOrdered = async () => {
+    if (pendingItems.length === 0) return
+    
+    if (!confirm(`Mark all ${pendingItems.length} pending item(s) as ordered?`)) return
+
+    setBulkUpdating(true)
+    try {
+      await Promise.all(
+        pendingItems.map(item => OrderListService.markAsOrdered(item.id))
+      )
+      await loadOrderList()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update items')
+    } finally {
+      setBulkUpdating(false)
+    }
+  }
+
   const pendingItems = items.filter(item => !item.ordered)
   const orderedItems = items.filter(item => item.ordered)
 
@@ -120,16 +198,16 @@ export default function OrderListPage() {
         backgroundColor: '#f9fafb',
         minHeight: 'calc(100vh - 64px)',
       }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1>Items to Order</h1>
+          <h1 style={{ margin: 0, fontSize: '1.875rem', fontWeight: '700', color: '#111827' }}>Items to Order</h1>
           {weekCycleId && (
-            <p style={{ color: '#666', marginTop: '0.5rem' }}>
+            <p style={{ color: '#6b7280', marginTop: '0.5rem', margin: 0 }}>
               Week Cycle: {weekCycleId}
             </p>
           )}
         </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
           <button
             onClick={() => setShowAddModal(true)}
             style={{
@@ -137,12 +215,40 @@ export default function OrderListPage() {
               backgroundColor: '#0070f3',
               color: 'white',
               border: 'none',
-              borderRadius: '4px',
+              borderRadius: '8px',
               cursor: 'pointer',
-              fontSize: '1rem',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#0051cc'
+              e.currentTarget.style.transform = 'translateY(-1px)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#0070f3'
+              e.currentTarget.style.transform = 'translateY(0)'
             }}
           >
             + Add Item
+          </button>
+          <button
+            onClick={loadOrderList}
+            disabled={loading}
+            style={{
+              padding: '0.75rem 1.25rem',
+              backgroundColor: loading ? '#9ca3af' : '#f3f4f6',
+              color: loading ? '#fff' : '#111827',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              opacity: loading ? 0.6 : 1,
+            }}
+          >
+            {loading ? '⟳' : '↻'} Update
           </button>
           <button
             onClick={handleResetWeek}
@@ -151,9 +257,17 @@ export default function OrderListPage() {
               backgroundColor: '#dc2626',
               color: 'white',
               border: 'none',
-              borderRadius: '4px',
+              borderRadius: '8px',
               cursor: 'pointer',
-              fontSize: '1rem',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#b91c1c'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#dc2626'
             }}
           >
             Reset Week
@@ -192,22 +306,161 @@ export default function OrderListPage() {
       )}
 
       {loading ? (
-        <p>Loading order list...</p>
+        <div style={{ textAlign: 'center', padding: '3rem' }}>
+          <div style={{
+            width: '48px',
+            height: '48px',
+            border: '4px solid #e5e7eb',
+            borderTopColor: '#0070f3',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 1rem'
+          }} />
+          <p style={{ color: '#6b7280' }}>Loading order list...</p>
+        </div>
       ) : (
         <>
-          <div style={{ marginBottom: '1rem' }}>
-            <strong>Total Items:</strong> {items.length} • 
-            <span style={{ color: '#dc2626', marginLeft: '0.5rem' }}>
-              Pending: {pendingItems.length}
-            </span>
-            <span style={{ color: '#16a34a', marginLeft: '0.5rem' }}>
-              Ordered: {orderedItems.length}
-            </span>
+          {/* Summary Stats */}
+          <div style={{ 
+            display: 'flex', 
+            gap: '1.5rem', 
+            marginBottom: '1.5rem',
+            flexWrap: 'wrap',
+          }}>
+            <div style={{
+              padding: '1rem 1.5rem',
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              border: '1px solid #e5e7eb',
+              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+            }}>
+              <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '0.25rem' }}>Total Items</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#111827' }}>{items.length}</div>
+            </div>
+            <div style={{
+              padding: '1rem 1.5rem',
+              backgroundColor: '#fffbeb',
+              borderRadius: '8px',
+              border: '1px solid #fde68a',
+              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+            }}>
+              <div style={{ fontSize: '0.875rem', color: '#92400e', marginBottom: '0.25rem' }}>Pending</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#f59e0b' }}>{pendingItems.length}</div>
+            </div>
+            <div style={{
+              padding: '1rem 1.5rem',
+              backgroundColor: '#ecfdf5',
+              borderRadius: '8px',
+              border: '1px solid #b3e6cc',
+              boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+            }}>
+              <div style={{ fontSize: '0.875rem', color: '#166534', marginBottom: '0.25rem' }}>Ordered</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: '700', color: '#10b981' }}>{orderedItems.length}</div>
+            </div>
           </div>
+
+          {/* Bulk Actions Bar */}
+          {pendingItems.length > 0 && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '1rem',
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              border: '1px solid #e5e7eb',
+              marginBottom: '1rem',
+              flexWrap: 'wrap',
+              gap: '1rem',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                <input
+                  type="checkbox"
+                  checked={selectedItems.size > 0 && selectedItems.size === pendingItems.length}
+                  onChange={() => handleSelectAll(pendingItems.map(i => i.id))}
+                  style={{
+                    width: '20px',
+                    height: '20px',
+                    cursor: 'pointer',
+                  }}
+                />
+                <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>
+                  {selectedItems.size > 0 
+                    ? `${selectedItems.size} item(s) selected`
+                    : 'Select items for bulk actions'
+                  }
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                {selectedItems.size > 0 && (
+                  <>
+                    <button
+                      onClick={handleBulkMarkAsOrdered}
+                      disabled={bulkUpdating}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        backgroundColor: bulkUpdating ? '#9ca3af' : '#10b981',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: bulkUpdating ? 'not-allowed' : 'pointer',
+                        fontSize: '0.875rem',
+                        fontWeight: '600',
+                        opacity: bulkUpdating ? 0.6 : 1,
+                      }}
+                    >
+                      ✓ Mark Selected as Ordered
+                    </button>
+                    <button
+                      onClick={handleBulkRemove}
+                      disabled={bulkUpdating}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        backgroundColor: bulkUpdating ? '#9ca3af' : '#fee',
+                        color: '#c00',
+                        border: '1px solid #fcc',
+                        borderRadius: '6px',
+                        cursor: bulkUpdating ? 'not-allowed' : 'pointer',
+                        fontSize: '0.875rem',
+                        fontWeight: '600',
+                        opacity: bulkUpdating ? 0.6 : 1,
+                      }}
+                    >
+                      🗑️ Remove Selected
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={handleMarkAllPendingAsOrdered}
+                  disabled={bulkUpdating || pendingItems.length === 0}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    backgroundColor: (bulkUpdating || pendingItems.length === 0) ? '#9ca3af' : '#0070f3',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: (bulkUpdating || pendingItems.length === 0) ? 'not-allowed' : 'pointer',
+                    fontSize: '0.875rem',
+                    fontWeight: '600',
+                    opacity: (bulkUpdating || pendingItems.length === 0) ? 0.6 : 1,
+                  }}
+                >
+                  ✓ Mark All Pending as Ordered
+                </button>
+              </div>
+            </div>
+          )}
 
           {pendingItems.length > 0 && (
             <div style={{ marginBottom: '2rem' }}>
-              <h2 style={{ marginBottom: '1rem' }}>Pending Items ({pendingItems.length})</h2>
+              <h2 style={{ 
+                marginBottom: '1rem', 
+                fontSize: '1.125rem',
+                fontWeight: '700',
+                color: '#111827',
+              }}>
+                ⏳ Pending Items ({pendingItems.length})
+              </h2>
               {pendingItems.map((item) => (
                 <OrderListItemComponent
                   key={item.id}
@@ -215,6 +468,8 @@ export default function OrderListPage() {
                   onToggleOrdered={handleToggleOrdered}
                   onRemove={handleRemove}
                   onAddStock={handleAddStock}
+                  isSelected={selectedItems.has(item.id)}
+                  onSelect={handleSelectItem}
                 />
               ))}
             </div>
@@ -222,7 +477,14 @@ export default function OrderListPage() {
 
           {orderedItems.length > 0 && (
             <div>
-              <h2 style={{ marginBottom: '1rem' }}>Ordered Items ({orderedItems.length})</h2>
+              <h2 style={{ 
+                marginBottom: '1rem',
+                fontSize: '1.125rem',
+                fontWeight: '700',
+                color: '#111827',
+              }}>
+                ✅ Ordered Items ({orderedItems.length})
+              </h2>
               {orderedItems.map((item) => (
                 <OrderListItemComponent
                   key={item.id}
@@ -242,15 +504,22 @@ export default function OrderListPage() {
                 textAlign: 'center',
                 color: '#666',
                 border: '2px dashed #ddd',
-                borderRadius: '4px',
+                borderRadius: '8px',
+                backgroundColor: 'white',
               }}
             >
-              <p>No items in the order list yet.</p>
-              <p>Click "Add Item" to get started.</p>
+              <p style={{ fontSize: '1.125rem', marginBottom: '0.5rem' }}>No items in the order list yet.</p>
+              <p style={{ color: '#9ca3af' }}>Click "Add Item" to get started.</p>
             </div>
           )}
         </>
       )}
+
+      <style jsx>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
 
       <AddItemModal
         isOpen={showAddModal}
