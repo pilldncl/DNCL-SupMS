@@ -1,0 +1,392 @@
+import { supabase } from '../supabase/client'
+import type { StockItem, StockUpdate, SKU } from '../types/supply'
+
+/**
+ * Service for managing stock/inventory for parts/components
+ */
+export class StockService {
+  /**
+   * Get all stock items
+   */
+  static async getAllStock(): Promise<StockItem[]> {
+    try {
+      const { data, error } = await supabase
+        .from('supply_order_stock')
+        .select(`
+          *,
+          sku:sku_master!sku_id (*)
+        `)
+        .order('last_updated', { ascending: false })
+
+      if (error) {
+        console.error('Error fetching stock:', error)
+        throw error
+      }
+
+      // Fetch part type info separately
+      let partTypeMap = new Map<string, string>()
+      if (data && data.length > 0) {
+        const uniquePartTypes = Array.from(new Set(data.map((item: any) => item.part_type)))
+        const { data: partTypesData } = await supabase
+          .from('supply_order_part_types')
+          .select('name, display_name')
+          .in('name', uniquePartTypes)
+        
+        partTypeMap = new Map(
+          (partTypesData || []).map(pt => [pt.name, pt.display_name])
+        )
+      }
+
+      return (data || []).map((item: any) => ({
+        ...item,
+        sku: item.sku || undefined,
+        part_type_display: partTypeMap.get(item.part_type) || item.part_type,
+        is_low_stock: item.quantity <= item.low_stock_threshold,
+      })) as StockItem[]
+    } catch (error) {
+      console.error('Error in getAllStock:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get stock for a specific SKU + Part Type
+   */
+  static async getStockItem(skuId: number, partType: string): Promise<StockItem | null> {
+    try {
+      const { data, error } = await supabase
+        .from('supply_order_stock')
+        .select(`
+          *,
+          sku:sku_master!sku_id (*)
+        `)
+        .eq('sku_id', skuId)
+        .eq('part_type', partType)
+        .single()
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          return null // Not found
+        }
+        console.error('Error fetching stock item:', error)
+        throw error
+      }
+
+      // Get part type display name
+      const { data: partTypeData } = await supabase
+        .from('supply_order_part_types')
+        .select('display_name')
+        .eq('name', partType)
+        .single()
+
+      return {
+        ...data,
+        sku: data.sku || undefined,
+        part_type_display: partTypeData?.display_name || partType,
+        is_low_stock: data.quantity <= data.low_stock_threshold,
+      } as StockItem
+    } catch (error) {
+      console.error('Error in getStockItem:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get low stock items (quantity <= threshold)
+   */
+  static async getLowStockItems(): Promise<StockItem[]> {
+    try {
+      const { data, error } = await supabase
+        .from('supply_order_stock')
+        .select(`
+          *,
+          sku:sku_master!sku_id (*)
+        `)
+        .order('quantity', { ascending: true })
+
+      if (error) {
+        console.error('Error fetching low stock items:', error)
+        throw error
+      }
+
+      // Filter low stock items
+      const lowStockItems = (data || []).filter((item: any) => 
+        item.quantity <= item.low_stock_threshold
+      )
+
+      // Get part type display names
+      if (lowStockItems.length > 0) {
+        const uniquePartTypes = Array.from(new Set(lowStockItems.map((item: any) => item.part_type)))
+        const { data: partTypesData } = await supabase
+          .from('supply_order_part_types')
+          .select('name, display_name')
+          .in('name', uniquePartTypes)
+        
+        const partTypeMap = new Map(
+          (partTypesData || []).map(pt => [pt.name, pt.display_name])
+        )
+
+        return lowStockItems.map((item: any) => ({
+          ...item,
+          sku: item.sku || undefined,
+          part_type_display: partTypeMap.get(item.part_type) || item.part_type,
+          is_low_stock: true,
+        })) as StockItem[]
+      }
+
+      return []
+    } catch (error) {
+      console.error('Error in getLowStockItems:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Update stock (add or remove quantity)
+   */
+  static async updateStock(
+    skuId: number,
+    partType: string,
+    quantityChange: number,
+    notes?: string,
+    userId?: string
+  ): Promise<StockItem> {
+    try {
+      // Check if stock item exists
+      const existing = await this.getStockItem(skuId, partType)
+
+      if (existing) {
+        // Update existing stock
+        const newQuantity = Math.max(0, existing.quantity + quantityChange) // Don't go below 0
+
+        const { data, error } = await supabase
+          .from('supply_order_stock')
+          .update({
+            quantity: newQuantity,
+            last_updated: new Date().toISOString(),
+            updated_by: userId || null,
+            notes: notes || existing.notes || null,
+          })
+          .eq('sku_id', skuId)
+          .eq('part_type', partType)
+          .select(`
+            *,
+            sku:sku_master!sku_id (*)
+          `)
+          .single()
+
+        if (error) {
+          console.error('Error updating stock:', error)
+          throw error
+        }
+
+        // Get part type display name
+        const { data: partTypeData } = await supabase
+          .from('supply_order_part_types')
+          .select('display_name')
+          .eq('name', partType)
+          .single()
+
+        return {
+          ...data,
+          sku: data.sku || undefined,
+          part_type_display: partTypeData?.display_name || partType,
+          is_low_stock: data.quantity <= data.low_stock_threshold,
+        } as StockItem
+      } else {
+        // Create new stock item
+        if (quantityChange < 0) {
+          throw new Error('Cannot remove stock from non-existent item')
+        }
+
+        const { data, error } = await supabase
+          .from('supply_order_stock')
+          .insert({
+            sku_id: skuId,
+            part_type: partType,
+            quantity: quantityChange,
+            last_updated: new Date().toISOString(),
+            updated_by: userId || null,
+            notes: notes || null,
+          })
+          .select(`
+            *,
+            sku:sku_master!sku_id (*)
+          `)
+          .single()
+
+        if (error) {
+          console.error('Error creating stock item:', error)
+          throw error
+        }
+
+        // Get part type display name
+        const { data: partTypeData } = await supabase
+          .from('supply_order_part_types')
+          .select('display_name')
+          .eq('name', partType)
+          .single()
+
+        return {
+          ...data,
+          sku: data.sku || undefined,
+          part_type_display: partTypeData?.display_name || partType,
+          is_low_stock: data.quantity <= data.low_stock_threshold,
+        } as StockItem
+      }
+    } catch (error) {
+      console.error('Error in updateStock:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Set absolute stock quantity (instead of relative change)
+   */
+  static async setStock(
+    skuId: number,
+    partType: string,
+    quantity: number,
+    lowStockThreshold?: number,
+    notes?: string,
+    userId?: string
+  ): Promise<StockItem> {
+    try {
+      const existing = await this.getStockItem(skuId, partType)
+
+      if (existing) {
+        // Update existing
+        const { data, error } = await supabase
+          .from('supply_order_stock')
+          .update({
+            quantity: Math.max(0, quantity),
+            low_stock_threshold: lowStockThreshold ?? existing.low_stock_threshold,
+            last_updated: new Date().toISOString(),
+            updated_by: userId || null,
+            notes: notes ?? existing.notes ?? null,
+          })
+          .eq('sku_id', skuId)
+          .eq('part_type', partType)
+          .select(`
+            *,
+            sku:sku_master!sku_id (*)
+          `)
+          .single()
+
+        if (error) {
+          console.error('Error setting stock:', error)
+          throw error
+        }
+
+        // Get part type display name
+        const { data: partTypeData } = await supabase
+          .from('supply_order_part_types')
+          .select('display_name')
+          .eq('name', partType)
+          .single()
+
+        return {
+          ...data,
+          sku: data.sku || undefined,
+          part_type_display: partTypeData?.display_name || partType,
+          is_low_stock: data.quantity <= data.low_stock_threshold,
+        } as StockItem
+      } else {
+        // Create new
+        const { data, error } = await supabase
+          .from('supply_order_stock')
+          .insert({
+            sku_id: skuId,
+            part_type: partType,
+            quantity: Math.max(0, quantity),
+            low_stock_threshold: lowStockThreshold ?? 5,
+            last_updated: new Date().toISOString(),
+            updated_by: userId || null,
+            notes: notes || null,
+          })
+          .select(`
+            *,
+            sku:sku_master!sku_id (*)
+          `)
+          .single()
+
+        if (error) {
+          console.error('Error creating stock item:', error)
+          throw error
+        }
+
+        // Get part type display name
+        const { data: partTypeData } = await supabase
+          .from('supply_order_part_types')
+          .select('display_name')
+          .eq('name', partType)
+          .single()
+
+        return {
+          ...data,
+          sku: data.sku || undefined,
+          part_type_display: partTypeData?.display_name || partType,
+          is_low_stock: data.quantity <= data.low_stock_threshold,
+        } as StockItem
+      }
+    } catch (error) {
+      console.error('Error in setStock:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Update stock when orders arrive (bulk update from order list)
+   */
+  static async updateStockFromOrder(orderItemId: string, userId?: string): Promise<void> {
+    try {
+      // Get the order item
+      const { data: orderItem, error: orderError } = await supabase
+        .from('supply_order_items')
+        .select('sku_id, part_type, quantity')
+        .eq('id', orderItemId)
+        .single()
+
+      if (orderError || !orderItem) {
+        throw new Error('Order item not found')
+      }
+
+      // Update stock (add quantity when order arrives)
+      const quantity = orderItem.quantity || 1
+      await this.updateStock(
+        orderItem.sku_id,
+        orderItem.part_type,
+        quantity,
+        `Received from order ${orderItemId}`,
+        userId
+      )
+    } catch (error) {
+      console.error('Error updating stock from order:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get stock summary statistics
+   */
+  static async getStockSummary(): Promise<{
+    total_items: number
+    low_stock_count: number
+    out_of_stock_count: number
+    total_value?: number
+  }> {
+    try {
+      const allStock = await this.getAllStock()
+      
+      return {
+        total_items: allStock.length,
+        low_stock_count: allStock.filter(item => item.is_low_stock && item.quantity > 0).length,
+        out_of_stock_count: allStock.filter(item => item.quantity === 0).length,
+      }
+    } catch (error) {
+      console.error('Error in getStockSummary:', error)
+      throw error
+    }
+  }
+}
+
