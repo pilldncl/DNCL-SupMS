@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { OrderListService, StockService } from '@/lib/services'
-import type { OrderListSummary, OrderListItem, WeekCycle, StockItem } from '@/lib/types/supply'
+import type { OrderListSummary, OrderListItem, WeekCycle, StockItem, OrderStatus } from '@/lib/types/supply'
 import Link from 'next/link'
 import { Sidebar } from '@/components/Sidebar'
 import { TopBar } from '@/components/TopBar'
 import { QuickAddOrderListForm } from '@/components/QuickAddOrderListForm'
 import { EditOrderItemModal } from '@/components/EditOrderItemModal'
 import { useMobile } from '@/lib/hooks/useMobile'
+import { Box, Card, HStack, VStack, Text, Badge, Tabs, Heading } from '@chakra-ui/react'
 
 /**
  * Professional Dashboard - Simplified, Less Cluttered
@@ -31,6 +32,7 @@ export default function DashboardPage() {
   const [updatingItems, setUpdatingItems] = useState<Set<string>>(new Set())
   const [editingItem, setEditingItem] = useState<OrderListItem | null>(null)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [activeTab, setActiveTab] = useState<'PENDING' | 'ORDERED' | 'SHIPPING' | 'RECEIVED' | 'COMPLETED'>('PENDING')
 
   useEffect(() => {
     loadDashboardData()
@@ -169,6 +171,51 @@ export default function DashboardPage() {
 
   if (!summary) {
     return null
+  }
+
+  // Helper function to get item status
+  const getItemStatus = (item: OrderListItem): OrderStatus => {
+    return (item.status as OrderStatus) || (item.ordered ? 'ORDERED' : 'PENDING')
+  }
+
+  // Group items by status
+  const pendingItems = recentOrderItems.filter(item => getItemStatus(item) === 'PENDING')
+  const orderedItems = recentOrderItems.filter(item => getItemStatus(item) === 'ORDERED')
+  const shippingItems = recentOrderItems.filter(item => getItemStatus(item) === 'SHIPPING')
+  const receivedItems = recentOrderItems.filter(item => getItemStatus(item) === 'RECEIVED')
+  const completedItems = recentOrderItems.filter(item => getItemStatus(item) === 'STOCK_ADDED')
+
+  const tabConfig = {
+    PENDING: {
+      label: 'Pending',
+      icon: '⏳',
+      items: pendingItems,
+      colorPalette: 'orange',
+    },
+    ORDERED: {
+      label: 'Ordered',
+      icon: '📋',
+      items: orderedItems,
+      colorPalette: 'blue',
+    },
+    SHIPPING: {
+      label: 'Shipping',
+      icon: '🚚',
+      items: shippingItems,
+      colorPalette: 'purple',
+    },
+    RECEIVED: {
+      label: 'Received',
+      icon: '📦',
+      items: receivedItems,
+      colorPalette: 'green',
+    },
+    COMPLETED: {
+      label: 'Completed',
+      icon: '✅',
+      items: completedItems,
+      colorPalette: 'gray',
+    },
   }
 
   const weekStartDate = weekCycle?.start_date 
@@ -376,146 +423,37 @@ export default function DashboardPage() {
                 />
               </div>
 
-              {/* Stock Status Summary - Clickable */}
-              <Link
-                href="/stock"
-                style={{
-                  textDecoration: 'none',
-                  color: 'inherit',
-                  display: 'block',
-                }}
-              >
-                <div style={{
-                  backgroundColor: 'white',
-                  borderRadius: '12px',
-                  padding: '1.25rem',
-                  border: '1px solid #e5e7eb',
-                  boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                  e.currentTarget.style.transform = 'translateY(-2px)'
-                  e.currentTarget.style.borderColor = '#0070f3'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.boxShadow = '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
-                  e.currentTarget.style.transform = 'translateY(0)'
-                  e.currentTarget.style.borderColor = '#e5e7eb'
-                }}
+              {/* Stock Status Summary - Clickable - Only show if there are low stock items */}
+              {lowStockItems.length > 0 && (
+                <Link
+                  href="/stock"
+                  style={{
+                    textDecoration: 'none',
+                    color: 'inherit',
+                    display: 'block',
+                  }}
                 >
-                  <div style={{ 
-                    fontSize: '0.875rem', 
-                    fontWeight: '600', 
-                    color: '#374151',
-                    marginBottom: '0.75rem',
-                    display: 'flex',
-                    justifyContent: 'flex-end',
-                    alignItems: 'center',
-                  }}>
-                    <span style={{ fontSize: '0.75rem', color: '#0070f3', fontWeight: '500' }}>View All →</span>
-                  </div>
-                  
-                  {/* Latest Arrivals */}
-                  {latestArrivals.length > 0 && (
-                    <div style={{ marginBottom: '1rem' }}>
-                      <div style={{ 
-                        fontSize: '0.75rem', 
-                        fontWeight: '600', 
-                        color: '#374151',
-                        marginBottom: '0.75rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                      }}>
-                        📦 Latest Arrivals
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        {latestArrivals.slice(0, 3).map((item) => {
-                          const skuName = item.sku?.sku_code || 
-                            (item.sku?.brand && item.sku?.model 
-                              ? `${item.sku.brand} ${item.sku.model}` 
-                              : `SKU ${item.sku_id}`)
-                          const dateStr = item.last_updated 
-                            ? new Date(item.last_updated).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                            : ''
-                          
-                          return (
-                            <div
-                              key={`${item.sku_id}-${item.part_type}`}
-                              style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'flex-start',
-                                padding: '0.75rem',
-                                backgroundColor: '#f9fafb',
-                                borderRadius: '8px',
-                                border: '1px solid #e5e7eb',
-                                transition: 'all 0.2s',
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor = '#f3f4f6'
-                                e.currentTarget.style.borderColor = '#d1d5db'
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = '#f9fafb'
-                                e.currentTarget.style.borderColor = '#e5e7eb'
-                              }}
-                            >
-                              <div style={{ flex: 1, minWidth: 0, marginRight: '0.75rem' }}>
-                                <div style={{ 
-                                  fontWeight: '600', 
-                                  color: '#111827',
-                                  fontSize: '0.8rem',
-                                  marginBottom: '0.25rem',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                }}>
-                                  {skuName}
-                                </div>
-                                <div style={{ 
-                                  color: '#6b7280',
-                                  fontSize: '0.7rem',
-                                  fontWeight: '500',
-                                }}>
-                                  {item.part_type_display || item.part_type}
-                                </div>
-                              </div>
-                              <div style={{ 
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'flex-end',
-                                gap: '0.25rem',
-                              }}>
-                                <div style={{ 
-                                  fontSize: '0.8rem',
-                                  fontWeight: '700',
-                                  color: '#16a34a',
-                                  backgroundColor: '#dcfce7',
-                                  padding: '0.25rem 0.5rem',
-                                  borderRadius: '4px',
-                                  whiteSpace: 'nowrap',
-                                }}>
-                                  Qty: {item.quantity}
-                                </div>
-                                <div style={{ 
-                                  fontSize: '0.7rem',
-                                  color: '#6b7280',
-                                  whiteSpace: 'nowrap',
-                                }}>
-                                  {dateStr}
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Low Stock Items */}
-                  {lowStockItems.length > 0 && (
+                  <div style={{
+                    backgroundColor: 'white',
+                    borderRadius: '12px',
+                    padding: '1.25rem',
+                    border: '1px solid #e5e7eb',
+                    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                    e.currentTarget.style.transform = 'translateY(-2px)'
+                    e.currentTarget.style.borderColor = '#0070f3'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
+                    e.currentTarget.style.transform = 'translateY(0)'
+                    e.currentTarget.style.borderColor = '#e5e7eb'
+                  }}
+                  >
+                    {/* Low Stock Items */}
                     <div>
                       <Link
                         href="/stock?filter=low"
@@ -603,19 +541,9 @@ export default function DashboardPage() {
                         </div>
                       )}
                     </div>
-                  )}
-                  
-                  {latestArrivals.length === 0 && lowStockItems.length === 0 && (
-                    <div style={{ 
-                      fontSize: '0.75rem', 
-                      color: '#6b7280',
-                      marginTop: '0.5rem',
-                    }}>
-                      {stockSummary.total_items - stockSummary.low_stock_count - stockSummary.out_of_stock_count} in good standing
-                    </div>
-                  )}
-                </div>
-              </Link>
+                  </div>
+                </Link>
+              )}
             </div>
           )}
         </div>
@@ -798,111 +726,125 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Recent Order List Additions */}
-        {recentOrderItems.length > 0 && (
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            padding: '1.5rem',
-            border: '1px solid #e5e7eb',
-            boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
-            marginBottom: '2rem',
-          }}>
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'space-between',
-              marginBottom: '1rem',
+        {/* Latest Arrivals - Side by Side */}
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', 
+          gap: '1rem', 
+          marginBottom: '2rem' 
+        }}>
+          {/* Order List Latest Arrivals */}
+          {recentOrderItems.length > 0 && (
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '1rem',
+              border: '1px solid #e5e7eb',
+              boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
             }}>
-              <h2 style={{ 
-                margin: 0, 
-                fontSize: '1.125rem', 
-                fontWeight: '700', 
-                color: '#111827' 
+              <div style={{ 
+                fontSize: '0.875rem', 
+                fontWeight: '600', 
+                color: '#374151',
+                marginBottom: '0.625rem',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
               }}>
-                📋 Recent Order List Additions
-              </h2>
-              <Link
-                href="/order-list"
-                style={{
-                  fontSize: '0.875rem',
-                  color: '#0070f3',
-                  textDecoration: 'none',
-                  fontWeight: '500',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.textDecoration = 'underline'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.textDecoration = 'none'
-                }}
-              >
-                View All →
-              </Link>
-            </div>
-            
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
-                    <th style={{ 
-                      textAlign: 'left', 
-                      padding: '0.75rem', 
-                      fontSize: '0.875rem',
+                <div style={{ 
+                  fontSize: '0.75rem', 
+                  fontWeight: '600', 
+                  color: '#374151',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}>
+                  📋 Order List
+                </div>
+                <Link
+                  href="/order-list"
+                  style={{
+                    fontSize: '0.75rem',
+                    color: '#0070f3',
+                    textDecoration: 'none',
+                    fontWeight: '500',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.textDecoration = 'underline'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.textDecoration = 'none'
+                  }}
+                >
+                  View All →
+                </Link>
+              </div>
+
+              {/* Mini Tabs */}
+              <div style={{ 
+                display: 'flex', 
+                gap: '0.375rem', 
+                marginBottom: '0.625rem',
+                flexWrap: 'wrap',
+              }}>
+                {Object.entries(tabConfig).map(([key, config]) => (
+                  <button
+                    key={key}
+                    onClick={() => setActiveTab(key as typeof activeTab)}
+                    style={{
+                      padding: '0.375rem 0.75rem',
+                      fontSize: '0.7rem',
                       fontWeight: '600',
-                      color: '#374151',
-                    }}>
-                      SKU
-                    </th>
-                    <th style={{ 
-                      textAlign: 'left', 
-                      padding: '0.75rem', 
-                      fontSize: '0.875rem',
-                      fontWeight: '600',
-                      color: '#374151',
-                    }}>
-                      Part Type
-                    </th>
-                    <th style={{ 
-                      textAlign: 'center', 
-                      padding: '0.75rem', 
-                      fontSize: '0.875rem',
-                      fontWeight: '600',
-                      color: '#374151',
-                    }}>
-                      Quantity
-                    </th>
-                    <th style={{ 
-                      textAlign: 'center', 
-                      padding: '0.75rem', 
-                      fontSize: '0.875rem',
-                      fontWeight: '600',
-                      color: '#374151',
-                    }}>
-                      Status
-                    </th>
-                    <th style={{ 
-                      textAlign: 'right', 
-                      padding: '0.75rem', 
-                      fontSize: '0.875rem',
-                      fontWeight: '600',
-                      color: '#374151',
-                    }}>
-                      Added
-                    </th>
-                    <th style={{ 
-                      textAlign: 'center', 
-                      padding: '0.75rem', 
-                      fontSize: '0.875rem',
-                      fontWeight: '600',
-                      color: '#374151',
-                    }}>
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentOrderItems.map((item) => {
+                      borderRadius: '6px',
+                      border: '1px solid #e5e7eb',
+                      backgroundColor: activeTab === key ? '#f3f4f6' : 'transparent',
+                      color: activeTab === key ? '#111827' : '#6b7280',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.25rem',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (activeTab !== key) {
+                        e.currentTarget.style.backgroundColor = '#f9fafb'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (activeTab !== key) {
+                        e.currentTarget.style.backgroundColor = 'transparent'
+                      }
+                    }}
+                  >
+                    <span>{config.icon}</span>
+                    <span>{config.label}</span>
+                    {config.items.length > 0 && (
+                      <span style={{
+                        fontSize: '0.65rem',
+                        backgroundColor: activeTab === key ? '#d1d5db' : '#e5e7eb',
+                        color: activeTab === key ? '#111827' : '#6b7280',
+                        padding: '0.125rem 0.375rem',
+                        borderRadius: '4px',
+                        fontWeight: '600',
+                      }}>
+                        {config.items.length}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Tab Content */}
+              {tabConfig[activeTab].items.length === 0 ? (
+                <div style={{ 
+                  fontSize: '0.75rem', 
+                  color: '#6b7280',
+                  marginTop: '0.5rem',
+                }}>
+                  No items in "{tabConfig[activeTab].label}" status
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                  {tabConfig[activeTab].items.slice(0, 5).map((item) => {
                     const skuName = item.sku?.sku_code || 
                       (item.sku?.brand && item.sku?.model 
                         ? `${item.sku.brand} ${item.sku.model}` 
@@ -910,145 +852,225 @@ export default function DashboardPage() {
                     const addedDate = new Date(item.added_at).toLocaleDateString('en-US', { 
                       month: 'short', 
                       day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
                     })
                     
                     return (
-                      <tr 
+                      <div
                         key={item.id}
-                        style={{ 
-                          borderBottom: '1px solid #f3f4f6',
-                          transition: 'background-color 0.2s',
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '0.5rem 0.625rem',
+                          backgroundColor: '#f9fafb',
+                          borderRadius: '6px',
+                          border: '1px solid #e5e7eb',
+                          transition: 'all 0.2s',
                         }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = '#f9fafb'
+                          e.currentTarget.style.backgroundColor = '#f3f4f6'
+                          e.currentTarget.style.borderColor = '#d1d5db'
                         }}
                         onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent'
+                          e.currentTarget.style.backgroundColor = '#f9fafb'
+                          e.currentTarget.style.borderColor = '#e5e7eb'
                         }}
                       >
-                        <td style={{ 
-                          padding: '0.75rem', 
-                          fontSize: '0.875rem',
-                          fontWeight: '500',
-                          color: '#111827',
-                        }}>
-                          {skuName}
-                        </td>
-                        <td style={{ 
-                          padding: '0.75rem', 
-                          fontSize: '0.875rem',
-                          color: '#6b7280',
-                        }}>
-                          {item.part_type_display || item.part_type}
-                        </td>
-                        <td style={{ 
-                          padding: '0.75rem', 
-                          fontSize: '0.875rem',
-                          textAlign: 'center',
-                          color: '#6b7280',
-                        }}>
-                          {item.quantity || '-'}
-                        </td>
-                        <td style={{ 
-                          padding: '0.75rem', 
-                          fontSize: '0.875rem',
-                          textAlign: 'center',
-                        }}>
-                          <span style={{
-                            padding: '0.25rem 0.75rem',
-                            borderRadius: '12px',
+                        <div style={{ flex: 1, minWidth: 0, marginRight: '0.5rem' }}>
+                          <div style={{ 
+                            fontWeight: '600', 
+                            color: '#111827',
                             fontSize: '0.75rem',
-                            fontWeight: '600',
-                            backgroundColor: item.ordered ? '#dcfce7' : '#fef3c7',
-                            color: item.ordered ? '#166534' : '#92400e',
+                            marginBottom: '0.125rem',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
                           }}>
-                            {item.ordered ? '✅ Ordered' : '⏳ Pending'}
-                          </span>
-                        </td>
-                        <td style={{ 
-                          padding: '0.75rem', 
-                          fontSize: '0.75rem',
-                          textAlign: 'right',
-                          color: '#6b7280',
-                        }}>
-                          {addedDate}
-                        </td>
-                        <td style={{ 
-                          padding: '0.75rem', 
-                          fontSize: '0.875rem',
-                          textAlign: 'center',
-                        }}>
-                          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-                            <button
-                              onClick={() => handleEditItem(item)}
-                              disabled={updatingItems.has(item.id)}
-                              style={{
-                                padding: '0.5rem 1rem',
-                                backgroundColor: updatingItems.has(item.id) ? '#9ca3af' : '#0070f3',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '6px',
-                                cursor: updatingItems.has(item.id) ? 'not-allowed' : 'pointer',
-                                fontSize: '0.75rem',
-                                fontWeight: '600',
-                                opacity: updatingItems.has(item.id) ? 0.6 : 1,
-                                transition: 'all 0.2s',
-                              }}
-                              onMouseEnter={(e) => {
-                                if (!updatingItems.has(item.id)) {
-                                  e.currentTarget.style.backgroundColor = '#0051cc'
-                                }
-                              }}
-                              onMouseLeave={(e) => {
-                                if (!updatingItems.has(item.id)) {
-                                  e.currentTarget.style.backgroundColor = '#0070f3'
-                                }
-                              }}
-                            >
-                              ✏️ Modify
-                            </button>
-                            {!item.ordered && (
-                              <button
-                                onClick={() => handleMarkAsOrdered(item.id)}
-                                disabled={updatingItems.has(item.id)}
-                                style={{
-                                  padding: '0.5rem 1rem',
-                                  backgroundColor: updatingItems.has(item.id) ? '#9ca3af' : '#10b981',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '6px',
-                                  cursor: updatingItems.has(item.id) ? 'not-allowed' : 'pointer',
-                                  fontSize: '0.75rem',
-                                  fontWeight: '600',
-                                  opacity: updatingItems.has(item.id) ? 0.6 : 1,
-                                  transition: 'all 0.2s',
-                                }}
-                                onMouseEnter={(e) => {
-                                  if (!updatingItems.has(item.id)) {
-                                    e.currentTarget.style.backgroundColor = '#059669'
-                                  }
-                                }}
-                                onMouseLeave={(e) => {
-                                  if (!updatingItems.has(item.id)) {
-                                    e.currentTarget.style.backgroundColor = '#10b981'
-                                  }
-                                }}
-                              >
-                                {updatingItems.has(item.id) ? '...' : '✓ Mark Ordered'}
-                              </button>
-                            )}
+                            {skuName}
                           </div>
-                        </td>
-                      </tr>
+                          <div style={{ 
+                            color: '#6b7280',
+                            fontSize: '0.65rem',
+                            fontWeight: '500',
+                          }}>
+                            {item.part_type_display || item.part_type}
+                          </div>
+                        </div>
+                        <div style={{ 
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'flex-end',
+                          gap: '0.125rem',
+                        }}>
+                          {item.quantity && (
+                            <div style={{ 
+                              fontSize: '0.7rem',
+                              fontWeight: '700',
+                              color: '#16a34a',
+                              backgroundColor: '#dcfce7',
+                              padding: '0.125rem 0.375rem',
+                              borderRadius: '3px',
+                              whiteSpace: 'nowrap',
+                            }}>
+                              Qty: {item.quantity}
+                            </div>
+                          )}
+                          <div style={{ 
+                            fontSize: '0.65rem',
+                            color: '#6b7280',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {addedDate}
+                          </div>
+                        </div>
+                      </div>
                     )
                   })}
-                </tbody>
-              </table>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Stock Latest Arrivals */}
+          {stockSummary && (
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '1rem',
+              border: '1px solid #e5e7eb',
+              boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+            }}>
+              <div style={{ 
+                fontSize: '0.875rem', 
+                fontWeight: '600', 
+                color: '#374151',
+                marginBottom: '0.625rem',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}>
+                <div style={{ 
+                  fontSize: '0.75rem', 
+                  fontWeight: '600', 
+                  color: '#374151',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}>
+                  📦 Latest Arrivals
+                </div>
+                <Link
+                  href="/stock"
+                  style={{
+                    fontSize: '0.75rem',
+                    color: '#0070f3',
+                    textDecoration: 'none',
+                    fontWeight: '500',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.textDecoration = 'underline'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.textDecoration = 'none'
+                  }}
+                >
+                  View All →
+                </Link>
+              </div>
+              
+              {latestArrivals.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                  {latestArrivals.slice(0, 5).map((item) => {
+                    const skuName = item.sku?.sku_code || 
+                      (item.sku?.brand && item.sku?.model 
+                        ? `${item.sku.brand} ${item.sku.model}` 
+                        : `SKU ${item.sku_id}`)
+                    const dateStr = item.last_updated 
+                      ? new Date(item.last_updated).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                      : ''
+                    
+                    return (
+                      <div
+                        key={`${item.sku_id}-${item.part_type}`}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '0.5rem 0.625rem',
+                          backgroundColor: '#f9fafb',
+                          borderRadius: '6px',
+                          border: '1px solid #e5e7eb',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = '#f3f4f6'
+                          e.currentTarget.style.borderColor = '#d1d5db'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = '#f9fafb'
+                          e.currentTarget.style.borderColor = '#e5e7eb'
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0, marginRight: '0.5rem' }}>
+                          <div style={{ 
+                            fontWeight: '600', 
+                            color: '#111827',
+                            fontSize: '0.75rem',
+                            marginBottom: '0.125rem',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {skuName}
+                          </div>
+                          <div style={{ 
+                            color: '#6b7280',
+                            fontSize: '0.65rem',
+                            fontWeight: '500',
+                          }}>
+                            {item.part_type_display || item.part_type}
+                          </div>
+                        </div>
+                        <div style={{ 
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'flex-end',
+                          gap: '0.125rem',
+                        }}>
+                          <div style={{ 
+                            fontSize: '0.7rem',
+                            fontWeight: '700',
+                            color: '#16a34a',
+                            backgroundColor: '#dcfce7',
+                            padding: '0.125rem 0.375rem',
+                            borderRadius: '3px',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            Qty: {item.quantity}
+                          </div>
+                          <div style={{ 
+                            fontSize: '0.65rem',
+                            color: '#6b7280',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {dateStr}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div style={{ 
+                  fontSize: '0.75rem', 
+                  color: '#6b7280',
+                  marginTop: '0.5rem',
+                }}>
+                  No recent arrivals
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Quick Actions */}
         <div style={{

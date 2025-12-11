@@ -25,6 +25,35 @@ export interface PartType {
   is_active?: boolean
 }
 
+export type OrderStatus = 'PENDING' | 'ORDERED' | 'SHIPPING' | 'RECEIVED' | 'STOCK_ADDED'
+
+// Status order for sequential progression
+export const ORDER_STATUS_SEQUENCE: OrderStatus[] = [
+  'PENDING',
+  'ORDERED', 
+  'SHIPPING',
+  'RECEIVED',
+  'STOCK_ADDED'
+]
+
+// Get next status in sequence
+export function getNextStatus(current: OrderStatus): OrderStatus | null {
+  const currentIndex = ORDER_STATUS_SEQUENCE.indexOf(current)
+  if (currentIndex === -1 || currentIndex >= ORDER_STATUS_SEQUENCE.length - 1) {
+    return null
+  }
+  return ORDER_STATUS_SEQUENCE[currentIndex + 1]
+}
+
+// Get previous status in sequence
+export function getPreviousStatus(current: OrderStatus): OrderStatus | null {
+  const currentIndex = ORDER_STATUS_SEQUENCE.indexOf(current)
+  if (currentIndex <= 0) {
+    return null
+  }
+  return ORDER_STATUS_SEQUENCE[currentIndex - 1]
+}
+
 export interface OrderListItem {
   id: string
   sku_id: number // integer - references sku_master(id)
@@ -35,11 +64,20 @@ export interface OrderListItem {
   added_by: string
   added_by_name?: string // Populated from users
   added_at: string
-  ordered: boolean
+  ordered: boolean // Legacy field, kept for backward compatibility
   ordered_by?: string | null
   ordered_by_name?: string | null
   ordered_at?: string | null
   week_cycle_id: string
+  // New status workflow fields
+  status?: OrderStatus
+  tracking_number?: string | null
+  tracking_url?: string | null
+  shipping_at?: string | null
+  received_at?: string | null
+  stock_added_at?: string | null
+  stock_added_by?: string | null
+  stock_quantity_added?: number | null
 }
 
 export interface WeekCycle {

@@ -1,5 +1,5 @@
 import { supabase } from '../supabase/client'
-import type { OrderListItem, SKU, PartType, WeekCycle, OrderListSummary } from '../types/supply'
+import type { OrderListItem, SKU, PartType, WeekCycle, OrderListSummary, OrderStatus } from '../types/supply'
 
 /**
  * Service for managing the order list functionality
@@ -94,6 +94,14 @@ export class OrderListService {
         .from('supply_order_items')
         .select(`
           *,
+          status,
+          tracking_number,
+          tracking_url,
+          shipping_at,
+          received_at,
+          stock_added_at,
+          stock_added_by,
+          stock_quantity_added,
           sku:sku_master!sku_id (*)
         `)
         .eq('week_cycle_id', weekCycle.id)
@@ -119,11 +127,17 @@ export class OrderListService {
       }
 
       // Transform the data to match our type
-      return (data || []).map((item: any) => ({
-        ...item,
-        sku: item.sku || undefined,
-        part_type_display: partTypeMap.get(item.part_type) || item.part_type,
-      })) as OrderListItem[]
+      return (data || []).map((item: any) => {
+        // Ensure status is properly set - use explicit status if available, otherwise derive from ordered
+        const resolvedStatus = item.status || (item.ordered ? 'ORDERED' : 'PENDING')
+        return {
+          ...item,
+          sku: item.sku || undefined,
+          part_type_display: partTypeMap.get(item.part_type) || item.part_type,
+          // Explicitly set status field
+          status: resolvedStatus,
+        } as OrderListItem
+      })
     } catch (error) {
       console.error('Error in getCurrentOrderList:', error)
       throw error
@@ -154,6 +168,7 @@ export class OrderListService {
           added_by: userId || null,
           week_cycle_id: weekCycle.id,
           ordered: false,
+          status: 'PENDING',
         })
         .select()
         .single()
@@ -173,7 +188,7 @@ export class OrderListService {
   /**
    * Mark item as ordered
    */
-  static async markAsOrdered(itemId: string, userId?: string): Promise<void> {
+  static async markAsOrdered(itemId: string, userId?: string, trackingNumber?: string, trackingUrl?: string): Promise<void> {
     try {
       const { error } = await supabase
         .from('supply_order_items')
@@ -181,6 +196,9 @@ export class OrderListService {
           ordered: true,
           ordered_by: userId || null,
           ordered_at: new Date().toISOString(),
+          status: 'ORDERED',
+          tracking_number: trackingNumber || null,
+          tracking_url: trackingUrl || null,
         })
         .eq('id', itemId)
 
@@ -190,6 +208,207 @@ export class OrderListService {
       }
     } catch (error) {
       console.error('Error in markAsOrdered:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Update order status (workflow transitions)
+   * Supports both forward and backward progression
+   */
+  static async updateStatus(
+    itemId: string, 
+    newStatus: OrderStatus, 
+    userId?: string
+  ): Promise<void> {
+    try {
+      const now = new Date().toISOString()
+      const updateData: any = {
+        status: newStatus,
+      }
+
+      // Update status-specific fields
+      switch (newStatus) {
+        case 'PENDING':
+          // Reverting to pending - clear ordered fields
+          updateData.ordered = false
+          updateData.ordered_by = null
+          updateData.ordered_at = null
+          updateData.tracking_number = null
+          updateData.tracking_url = null
+          updateData.shipping_at = null
+          updateData.received_at = null
+          updateData.stock_added_at = null
+          updateData.stock_added_by = null
+          updateData.stock_quantity_added = null
+          break
+        case 'ORDERED':
+          updateData.ordered = true
+          updateData.ordered_by = userId || null
+          updateData.ordered_at = now
+          // Clear later stage fields if reverting
+          updateData.shipping_at = null
+          updateData.received_at = null
+          updateData.stock_added_at = null
+          updateData.stock_added_by = null
+          updateData.stock_quantity_added = null
+          break
+        case 'SHIPPING':
+          updateData.shipping_at = now
+          // Ensure ordered is set
+          updateData.ordered = true
+          // Clear later stage fields if reverting
+          updateData.received_at = null
+          updateData.stock_added_at = null
+          updateData.stock_added_by = null
+          updateData.stock_quantity_added = null
+          break
+        case 'RECEIVED':
+          updateData.received_at = now
+          // Ensure previous stages are set
+          updateData.ordered = true
+          // Clear stock fields if reverting
+          // If stock was added, we need to remove it from inventory
+          const { data: currentItem } = await supabase
+            .from('supply_order_items')
+            .select('stock_quantity_added, sku_id, part_type')
+            .eq('id', itemId)
+            .single()
+          
+          if (currentItem?.stock_quantity_added && currentItem.stock_quantity_added > 0) {
+            // Remove stock that was previously added
+            const { StockService } = await import('./stock-service')
+            await StockService.updateStock(
+              currentItem.sku_id,
+              currentItem.part_type,
+              -currentItem.stock_quantity_added,
+              `Reverted from STOCK_ADDED status - order ${itemId.substring(0, 8)}`,
+              userId
+            )
+          }
+          updateData.stock_added_at = null
+          updateData.stock_added_by = null
+          updateData.stock_quantity_added = null
+          break
+        case 'STOCK_ADDED':
+          updateData.stock_added_at = now
+          updateData.stock_added_by = userId || null
+          // Ensure previous stages are set
+          updateData.ordered = true
+          break
+      }
+
+      const { error } = await supabase
+        .from('supply_order_items')
+        .update(updateData)
+        .eq('id', itemId)
+
+      if (error) {
+        console.error('Error updating order status:', error)
+        throw error
+      }
+    } catch (error) {
+      console.error('Error in updateStatus:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Mark as shipping
+   */
+  static async markAsShipping(itemId: string, userId?: string): Promise<void> {
+    return this.updateStatus(itemId, 'SHIPPING', userId)
+  }
+
+  /**
+   * Update tracking information for an order item
+   */
+  static async updateTracking(
+    itemId: string,
+    trackingNumber?: string,
+    trackingUrl?: string
+  ): Promise<void> {
+    try {
+      const updateData: any = {}
+      if (trackingNumber !== undefined) {
+        updateData.tracking_number = trackingNumber || null
+      }
+      if (trackingUrl !== undefined) {
+        updateData.tracking_url = trackingUrl || null
+      }
+
+      const { error } = await supabase
+        .from('supply_order_items')
+        .update(updateData)
+        .eq('id', itemId)
+
+      if (error) {
+        console.error('Error updating tracking:', error)
+        throw error
+      }
+    } catch (error) {
+      console.error('Error in updateTracking:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Mark as received
+   */
+  static async markAsReceived(itemId: string, userId?: string): Promise<void> {
+    return this.updateStatus(itemId, 'RECEIVED', userId)
+  }
+
+  /**
+   * Add stock and mark as stock added
+   */
+  static async addStockAndComplete(
+    itemId: string,
+    quantity: number,
+    userId?: string
+  ): Promise<void> {
+    try {
+      // Get the order item
+      const { data: orderItem, error: orderError } = await supabase
+        .from('supply_order_items')
+        .select('sku_id, part_type, quantity')
+        .eq('id', itemId)
+        .single()
+
+      if (orderError || !orderItem) {
+        throw new Error('Order item not found')
+      }
+
+      // Import StockService dynamically to avoid circular dependency
+      const { StockService } = await import('./stock-service')
+      
+      // Add to stock
+      await StockService.updateStock(
+        orderItem.sku_id,
+        orderItem.part_type,
+        quantity,
+        `Received from order ${itemId.substring(0, 8)}`,
+        userId
+      )
+
+      // Update order status
+      const now = new Date().toISOString()
+      const { error: updateError } = await supabase
+        .from('supply_order_items')
+        .update({
+          status: 'STOCK_ADDED',
+          stock_added_at: now,
+          stock_added_by: userId || null,
+          stock_quantity_added: quantity,
+        })
+        .eq('id', itemId)
+
+      if (updateError) {
+        console.error('Error updating order status:', updateError)
+        throw updateError
+      }
+    } catch (error) {
+      console.error('Error in addStockAndComplete:', error)
       throw error
     }
   }
@@ -205,6 +424,7 @@ export class OrderListService {
           ordered: false,
           ordered_by: null,
           ordered_at: null,
+          status: 'PENDING',
         })
         .eq('id', itemId)
 
@@ -316,8 +536,15 @@ export class OrderListService {
       const items = await this.getCurrentOrderList()
       
       const total_items = items.length
-      const ordered_items = items.filter(item => item.ordered).length
-      const pending_items = total_items - ordered_items
+      // Count by status for better accuracy
+      const ordered_items = items.filter(item => {
+        const status = item.status || (item.ordered ? 'ORDERED' : 'PENDING')
+        return status === 'ORDERED' || status === 'SHIPPING' || status === 'RECEIVED'
+      }).length
+      const pending_items = items.filter(item => {
+        const status = item.status || (item.ordered ? 'ORDERED' : 'PENDING')
+        return status === 'PENDING'
+      }).length
 
       const items_by_part_type: Record<string, number> = {}
       items.forEach(item => {
