@@ -116,9 +116,8 @@ export function MarketingHero() {
               }}
               fontWeight="semibold"
               px={8}
-              leftIcon={<span>💬</span>}
             >
-              Chat on WhatsApp (Preferred)
+              💬 Chat on WhatsApp (Preferred)
             </Button>
           </HStack>
 

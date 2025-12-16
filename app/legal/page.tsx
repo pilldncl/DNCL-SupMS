@@ -79,8 +79,10 @@ export default function LegalPage() {
               mt={4}
             >
               <Button
-                as="a"
-                href="#privacy-policy"
+                onClick={() => {
+                  const element = document.getElementById('privacy-policy')
+                  element?.scrollIntoView({ behavior: 'smooth' })
+                }}
                 size="sm"
                 variant="outline"
                 borderColor="white"
@@ -93,8 +95,10 @@ export default function LegalPage() {
                 Privacy Policy
               </Button>
               <Button
-                as="a"
-                href="#terms-of-service"
+                onClick={() => {
+                  const element = document.getElementById('terms-of-service')
+                  element?.scrollIntoView({ behavior: 'smooth' })
+                }}
                 size="sm"
                 variant="outline"
                 borderColor="white"
@@ -107,8 +111,10 @@ export default function LegalPage() {
                 Terms of Service
               </Button>
               <Button
-                as="a"
-                href="#cookie-policy"
+                onClick={() => {
+                  const element = document.getElementById('cookie-policy')
+                  element?.scrollIntoView({ behavior: 'smooth' })
+                }}
                 size="sm"
                 variant="outline"
                 borderColor="white"
@@ -121,8 +127,10 @@ export default function LegalPage() {
                 Cookie Policy
               </Button>
               <Button
-                as="a"
-                href="#compliance"
+                onClick={() => {
+                  const element = document.getElementById('compliance')
+                  element?.scrollIntoView({ behavior: 'smooth' })
+                }}
                 size="sm"
                 variant="outline"
                 borderColor="white"
@@ -135,8 +143,10 @@ export default function LegalPage() {
                 Compliance
               </Button>
               <Button
-                as="a"
-                href="#certifications"
+                onClick={() => {
+                  const element = document.getElementById('certifications')
+                  element?.scrollIntoView({ behavior: 'smooth' })
+                }}
                 size="sm"
                 variant="outline"
                 borderColor="white"
@@ -891,8 +901,10 @@ export default function LegalPage() {
                   <Text><strong>Location:</strong> Texas, United States</Text>
                 </VStack>
                 <Button
-                  as="a"
-                  href="#privacy-policy"
+                  onClick={() => {
+                    const element = document.getElementById('privacy-policy')
+                    element?.scrollIntoView({ behavior: 'smooth' })
+                  }}
                   bg="blue.600"
                   color="white"
                   size="md"
