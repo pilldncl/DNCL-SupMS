@@ -24,6 +24,10 @@ export function QuickAddStockForm({ onStockAdded }: QuickAddStockFormProps) {
   const [partType, setPartType] = useState('')
   const [quantity, setQuantity] = useState('')
   const [threshold, setThreshold] = useState('5')
+  const [trackingNumber, setTrackingNumber] = useState('')
+  const [trackingFormat, setTrackingFormat] = useState<'standard' | 'international' | 'custom'>('standard')
+  const [customPrefix, setCustomPrefix] = useState('')
+  const [customSuffix, setCustomSuffix] = useState('')
   const [partTypes, setPartTypes] = useState<PartType[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -187,12 +191,26 @@ export function QuickAddStockForm({ onStockAdded }: QuickAddStockFormProps) {
     setSubmitting(true)
     try {
       const thresh = threshold ? parseInt(threshold, 10) : 5
+      
+      // Format tracking number based on selected format
+      let finalTrackingNumber = trackingNumber.trim()
+      if (finalTrackingNumber) {
+        if (trackingFormat === 'custom') {
+          if (customPrefix) finalTrackingNumber = `${customPrefix}${finalTrackingNumber}`
+          if (customSuffix) finalTrackingNumber = `${finalTrackingNumber}${customSuffix}`
+        } else if (trackingFormat === 'international') {
+          finalTrackingNumber = finalTrackingNumber.toUpperCase()
+        }
+      }
+      
       await StockService.setStock(
         selectedSKU.id,
         partType.toUpperCase(),
         qty,
         isNaN(thresh) ? 5 : thresh,
-        `Quick add: ${selectedSKU.sku_code || selectedSKU.id}`
+        `Quick add: ${selectedSKU.sku_code || selectedSKU.id}`,
+        undefined,
+        finalTrackingNumber || undefined
       )
 
       setSuccess(`Stock added successfully!`)
@@ -203,6 +221,10 @@ export function QuickAddStockForm({ onStockAdded }: QuickAddStockFormProps) {
       setPartType('')
       setQuantity('')
       setThreshold('5')
+      setTrackingNumber('')
+      setTrackingFormat('standard')
+      setCustomPrefix('')
+      setCustomSuffix('')
       
       // Refresh stock list
       onStockAdded()
@@ -290,7 +312,7 @@ export function QuickAddStockForm({ onStockAdded }: QuickAddStockFormProps) {
             <form onSubmit={handleSubmit}>
           <div style={{
             display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : '2fr 1.5fr 1fr 1fr auto',
+            gridTemplateColumns: isMobile ? '1fr' : '2fr 1.5fr 1fr 1fr 1.5fr auto',
             gap: '0.75rem',
             alignItems: 'end',
           }}>
@@ -425,6 +447,96 @@ export function QuickAddStockForm({ onStockAdded }: QuickAddStockFormProps) {
                   backgroundColor: selectedSKU ? 'white' : '#f3f4f6',
                 }}
               />
+            </div>
+
+            {/* Tracking Number */}
+            <div>
+              <label style={{ 
+                display: 'block', 
+                marginBottom: '0.5rem', 
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                color: '#374151',
+              }}>
+                Tracking # <span style={{ fontSize: '0.75rem', color: '#6b7280', fontWeight: '400' }}>(Optional)</span>
+              </label>
+              <select
+                value={trackingFormat}
+                onChange={(e) => setTrackingFormat(e.target.value as 'standard' | 'international' | 'custom')}
+                disabled={submitting || !selectedSKU}
+                style={{
+                  width: '100%',
+                  padding: '0.375rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '0.75rem',
+                  marginBottom: '0.25rem',
+                  backgroundColor: selectedSKU ? 'white' : '#f3f4f6',
+                }}
+              >
+                <option value="standard">Standard</option>
+                <option value="international">International Waybill</option>
+                <option value="custom">Custom</option>
+              </select>
+              <input
+                type="text"
+                value={trackingNumber}
+                onChange={(e) => setTrackingNumber(e.target.value)}
+                placeholder={
+                  trackingFormat === 'international' 
+                    ? 'e.g., AWB123456789' 
+                    : trackingFormat === 'custom'
+                    ? 'Custom format'
+                    : 'e.g., 1Z999AA10123456784'
+                }
+                disabled={submitting || !selectedSKU}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '0.875rem',
+                  fontFamily: 'monospace',
+                  backgroundColor: selectedSKU ? 'white' : '#f3f4f6',
+                  textTransform: trackingFormat === 'international' ? 'uppercase' : 'none',
+                }}
+              />
+              {trackingFormat === 'custom' && (
+                <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    type="text"
+                    value={customPrefix}
+                    onChange={(e) => setCustomPrefix(e.target.value)}
+                    placeholder="Prefix"
+                    disabled={submitting || !selectedSKU}
+                    style={{
+                      flex: 1,
+                      padding: '0.375rem',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      fontFamily: 'monospace',
+                      backgroundColor: selectedSKU ? 'white' : '#f3f4f6',
+                    }}
+                  />
+                  <input
+                    type="text"
+                    value={customSuffix}
+                    onChange={(e) => setCustomSuffix(e.target.value)}
+                    placeholder="Suffix"
+                    disabled={submitting || !selectedSKU}
+                    style={{
+                      flex: 1,
+                      padding: '0.375rem',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      fontFamily: 'monospace',
+                      backgroundColor: selectedSKU ? 'white' : '#f3f4f6',
+                    }}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Submit Button */}

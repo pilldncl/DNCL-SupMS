@@ -21,6 +21,10 @@ export function UpdateStockModal({
   const [quantityChange, setQuantityChange] = useState<string>('')
   const [absoluteQuantity, setAbsoluteQuantity] = useState<string>('')
   const [lowStockThreshold, setLowStockThreshold] = useState<string>('')
+  const [trackingNumber, setTrackingNumber] = useState<string>('')
+  const [trackingFormat, setTrackingFormat] = useState<'standard' | 'international' | 'custom'>('standard')
+  const [customPrefix, setCustomPrefix] = useState<string>('')
+  const [customSuffix, setCustomSuffix] = useState<string>('')
   const [notes, setNotes] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -29,6 +33,24 @@ export function UpdateStockModal({
     if (isOpen) {
       setAbsoluteQuantity(stockItem.quantity.toString())
       setLowStockThreshold(stockItem.low_stock_threshold.toString())
+      const existing = stockItem.tracking_number || ''
+      setTrackingNumber(existing)
+      
+      // Try to detect format from existing tracking number
+      if (existing) {
+        if (/^[A-Z]{2,4}\d+/.test(existing) || /^[A-Z]\d{10,}/.test(existing)) {
+          setTrackingFormat('international')
+        } else if (/^[A-Z0-9]{10,}$/.test(existing)) {
+          setTrackingFormat('standard')
+        } else {
+          setTrackingFormat('custom')
+        }
+      } else {
+        setTrackingFormat('standard')
+      }
+      
+      setCustomPrefix('')
+      setCustomSuffix('')
       setQuantityChange('')
       setNotes('')
       setError(null)
@@ -75,12 +97,25 @@ export function UpdateStockModal({
           return
         }
 
+        // Format tracking number based on selected format
+        let finalTrackingNumber = trackingNumber.trim()
+        if (finalTrackingNumber) {
+          if (trackingFormat === 'custom') {
+            if (customPrefix) finalTrackingNumber = `${customPrefix}${finalTrackingNumber}`
+            if (customSuffix) finalTrackingNumber = `${finalTrackingNumber}${customSuffix}`
+          } else if (trackingFormat === 'international') {
+            finalTrackingNumber = finalTrackingNumber.toUpperCase()
+          }
+        }
+        
         await StockService.setStock(
           stockItem.sku_id,
           stockItem.part_type,
           quantity,
           threshold,
-          notes || undefined
+          notes || undefined,
+          undefined,
+          finalTrackingNumber || undefined
         )
       }
 
@@ -294,6 +329,91 @@ export function UpdateStockModal({
               </div>
             </>
           )}
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.95rem' }}>
+              Tracking Number <span style={{ fontSize: '0.75rem', color: '#6b7280', fontWeight: '400' }}>(Optional)</span>
+            </label>
+            <select
+              value={trackingFormat}
+              onChange={(e) => setTrackingFormat(e.target.value as 'standard' | 'international' | 'custom')}
+              disabled={submitting}
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '0.875rem',
+                marginBottom: '0.5rem',
+                backgroundColor: 'white',
+              }}
+            >
+              <option value="standard">Standard Tracking</option>
+              <option value="international">International Waybill</option>
+              <option value="custom">Custom Format</option>
+            </select>
+            <input
+              type="text"
+              value={trackingNumber}
+              onChange={(e) => setTrackingNumber(e.target.value)}
+              placeholder={
+                trackingFormat === 'international' 
+                  ? 'e.g., AWB123456789' 
+                  : trackingFormat === 'custom'
+                  ? 'Custom format'
+                  : 'e.g., 1Z999AA10123456784'
+              }
+              disabled={submitting}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: '1px solid #ddd',
+                borderRadius: '6px',
+                fontSize: '0.95rem',
+                fontFamily: 'monospace',
+                textTransform: trackingFormat === 'international' ? 'uppercase' : 'none',
+              }}
+            />
+            {trackingFormat === 'custom' && (
+              <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
+                <input
+                  type="text"
+                  value={customPrefix}
+                  onChange={(e) => setCustomPrefix(e.target.value)}
+                  placeholder="Prefix (optional)"
+                  disabled={submitting}
+                  style={{
+                    flex: 1,
+                    padding: '0.5rem',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '0.875rem',
+                    fontFamily: 'monospace',
+                  }}
+                />
+                <input
+                  type="text"
+                  value={customSuffix}
+                  onChange={(e) => setCustomSuffix(e.target.value)}
+                  placeholder="Suffix (optional)"
+                  disabled={submitting}
+                  style={{
+                    flex: 1,
+                    padding: '0.5rem',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '0.875rem',
+                    fontFamily: 'monospace',
+                  }}
+                />
+              </div>
+            )}
+            {trackingFormat === 'international' && (
+              <p style={{ fontSize: '0.85rem', color: '#0070f3', marginTop: '0.25rem', margin: 0 }}>
+                💡 International waybill numbers will be automatically converted to uppercase
+              </p>
+            )}
+          </div>
 
           <div style={{ marginBottom: '1.5rem' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.95rem' }}>

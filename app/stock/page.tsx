@@ -7,6 +7,8 @@ import type { StockItem, SKU, PartType } from '@/lib/types/supply'
 import { Sidebar } from '@/components/Sidebar'
 import { TopBar } from '@/components/TopBar'
 import { UpdateStockModal } from '@/components/UpdateStockModal'
+import { UpdateTrackingModal } from '@/components/UpdateTrackingModal'
+import { UpdateNotesModal } from '@/components/UpdateNotesModal'
 import { SKUAutocomplete } from '@/components/SKUAutocomplete'
 import { AddSKUModal } from '@/components/AddSKUModal'
 import { AddPartTypeModal } from '@/components/AddPartTypeModal'
@@ -35,6 +37,10 @@ export default function StockPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [selectedStockItem, setSelectedStockItem] = useState<StockItem | null>(null)
+  const [showTrackingModal, setShowTrackingModal] = useState(false)
+  const [selectedTrackingItem, setSelectedTrackingItem] = useState<StockItem | null>(null)
+  const [showNotesModal, setShowNotesModal] = useState(false)
+  const [selectedNotesItem, setSelectedNotesItem] = useState<StockItem | null>(null)
 
   // Bulk Entry State
   const [bulkRows, setBulkRows] = useState<BulkEntryRow[]>([
@@ -90,6 +96,16 @@ export default function StockPage() {
   const handleUpdateStock = (item: StockItem) => {
     setSelectedStockItem(item)
     setShowUpdateModal(true)
+  }
+
+  const handleUpdateTracking = (item: StockItem) => {
+    setSelectedTrackingItem(item)
+    setShowTrackingModal(true)
+  }
+
+  const handleUpdateNotes = (item: StockItem) => {
+    setSelectedNotesItem(item)
+    setShowNotesModal(true)
   }
 
   const handleStockUpdated = () => {
@@ -517,6 +533,7 @@ export default function StockPage() {
                         <th style={{ padding: '0.75rem 1rem', textAlign: 'right', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Quantity</th>
                         <th style={{ padding: '0.75rem 1rem', textAlign: 'right', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Threshold</th>
                         <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Status</th>
+                        <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Tracking</th>
                         <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Last Updated</th>
                         <th style={{ padding: '0.75rem 1rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>Actions</th>
                       </tr>
@@ -584,6 +601,55 @@ export default function StockPage() {
                               </span>
                             </td>
                             <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#6b7280' }}>
+                              {item.tracking_number ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                  <span style={{
+                                    fontFamily: 'monospace',
+                                    fontSize: '0.8rem',
+                                    color: '#0070f3',
+                                    fontWeight: '500',
+                                  }}>
+                                    📦 {item.tracking_number}
+                                  </span>
+                                  <button
+                                    onClick={() => handleUpdateTracking(item)}
+                                    style={{
+                                      padding: '0.25rem 0.5rem',
+                                      backgroundColor: 'transparent',
+                                      border: '1px solid #d1d5db',
+                                      borderRadius: '4px',
+                                      fontSize: '0.75rem',
+                                      color: '#6b7280',
+                                      cursor: 'pointer',
+                                    }}
+                                    title="Edit tracking number"
+                                  >
+                                    ✏️
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handleUpdateTracking(item)}
+                                  style={{
+                                    padding: '0.5rem 0.75rem',
+                                    backgroundColor: '#f3f4f6',
+                                    border: '1px dashed #d1d5db',
+                                    borderRadius: '6px',
+                                    fontSize: '0.75rem',
+                                    color: '#6b7280',
+                                    cursor: 'pointer',
+                                    fontWeight: '500',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.25rem',
+                                  }}
+                                >
+                                  <span>📦</span>
+                                  <span>Add Tracking</span>
+                                </button>
+                              )}
+                            </td>
+                            <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem', color: '#6b7280' }}>
                               {new Date(item.last_updated).toLocaleDateString('en-US', { 
                                 month: 'short', 
                                 day: 'numeric',
@@ -591,21 +657,43 @@ export default function StockPage() {
                               })}
                             </td>
                             <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                              <button
-                                onClick={() => handleUpdateStock(item)}
-                                style={{
-                                  padding: '0.5rem 1rem',
-                                  backgroundColor: '#0070f3',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '6px',
-                                  fontSize: '0.875rem',
-                                  fontWeight: '500',
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                Update
-                              </button>
+                              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                                <button
+                                  onClick={() => handleUpdateNotes(item)}
+                                  style={{
+                                    padding: '0.5rem 0.75rem',
+                                    backgroundColor: '#f3f4f6',
+                                    color: '#374151',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '500',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.25rem',
+                                  }}
+                                  title={item.notes ? 'Edit notes' : 'Add notes'}
+                                >
+                                  <span>📝</span>
+                                  <span>{item.notes ? 'Notes' : 'Add Notes'}</span>
+                                </button>
+                                <button
+                                  onClick={() => handleUpdateStock(item)}
+                                  style={{
+                                    padding: '0.5rem 1rem',
+                                    backgroundColor: '#0070f3',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    fontSize: '0.875rem',
+                                    fontWeight: '500',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  Update
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         )
@@ -922,6 +1010,40 @@ export default function StockPage() {
             }}
             stockItem={selectedStockItem}
             onStockUpdated={handleStockUpdated}
+          />
+        )}
+
+        {/* Update Tracking Modal */}
+        {showTrackingModal && selectedTrackingItem && (
+          <UpdateTrackingModal
+            isOpen={showTrackingModal}
+            onClose={() => {
+              setShowTrackingModal(false)
+              setSelectedTrackingItem(null)
+            }}
+            stockItem={selectedTrackingItem}
+            onTrackingUpdated={() => {
+              loadStock()
+              setShowTrackingModal(false)
+              setSelectedTrackingItem(null)
+            }}
+          />
+        )}
+
+        {/* Update Notes Modal */}
+        {showNotesModal && selectedNotesItem && (
+          <UpdateNotesModal
+            isOpen={showNotesModal}
+            onClose={() => {
+              setShowNotesModal(false)
+              setSelectedNotesItem(null)
+            }}
+            stockItem={selectedNotesItem}
+            onNotesUpdated={() => {
+              loadStock()
+              setShowNotesModal(false)
+              setSelectedNotesItem(null)
+            }}
           />
         )}
 

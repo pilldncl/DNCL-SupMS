@@ -110,6 +110,7 @@ export interface StockItem {
   last_updated: string
   updated_by?: string | null
   notes?: string | null
+  tracking_number?: string | null
   created_at?: string
   is_low_stock?: boolean // Calculated field
 }

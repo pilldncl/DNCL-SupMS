@@ -249,7 +249,8 @@ export class StockService {
     quantity: number,
     lowStockThreshold?: number,
     notes?: string,
-    userId?: string
+    userId?: string,
+    trackingNumber?: string
   ): Promise<StockItem> {
     try {
       const existing = await this.getStockItem(skuId, partType)
@@ -264,6 +265,7 @@ export class StockService {
             last_updated: new Date().toISOString(),
             updated_by: userId || null,
             notes: notes ?? existing.notes ?? null,
+            tracking_number: trackingNumber !== undefined ? (trackingNumber || null) : existing.tracking_number,
           })
           .eq('sku_id', skuId)
           .eq('part_type', partType)
@@ -303,6 +305,7 @@ export class StockService {
             last_updated: new Date().toISOString(),
             updated_by: userId || null,
             notes: notes || null,
+            tracking_number: trackingNumber || null,
           })
           .select(`
             *,

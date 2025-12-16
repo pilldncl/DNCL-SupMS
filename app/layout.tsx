@@ -1,5 +1,7 @@
 import './globals.css'
 import { Provider } from '@/components/ui/provider'
+import { SystemNotification } from '@/components/SystemNotification'
+import { Footer } from '@/components/Footer'
 
 export const metadata = {
   title: 'DNCL Supply Internal Tool',
@@ -16,8 +18,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body>
-        <Provider>{children}</Provider>
+      <body style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <Provider>
+          <SystemNotification />
+          <div style={{ flex: 1 }}>
+            {children}
+          </div>
+          <Footer />
+        </Provider>
       </body>
     </html>
   )

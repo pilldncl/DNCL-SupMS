@@ -294,7 +294,7 @@ export default function OrderListPage() {
             {/* Error Alert */}
             {error && (
               <Alert.Root status="error" variant="subtle">
-                <Alert.Icon />
+                <Alert.Indicator />
                 <Alert.Title>{error}</Alert.Title>
                 <Box ml="auto">
                   <Button
