@@ -276,14 +276,18 @@ export class OrderListService {
             .single()
           
           if (currentItem?.stock_quantity_added && currentItem.stock_quantity_added > 0) {
-            // Remove stock that was previously added
+            // Remove stock that was previously added using unified method
             const { StockService } = await import('./stock-service')
-            await StockService.updateStock(
+            await StockService.addOrUpdateStock(
               currentItem.sku_id,
               currentItem.part_type,
-              -currentItem.stock_quantity_added,
-              `Reverted from STOCK_ADDED status - order ${itemId.substring(0, 8)}`,
-              userId
+              -currentItem.stock_quantity_added, // Negative quantity for subtraction
+              'ADD', // ADD mode handles negative quantities as SUBTRACT
+              'ORDER_RECEIVED',
+              {
+                notes: `Reverted from STOCK_ADDED status - order ${itemId.substring(0, 8)}`,
+                userId,
+              }
             )
           }
           updateData.stock_added_at = null
@@ -382,13 +386,17 @@ export class OrderListService {
       // Import StockService dynamically to avoid circular dependency
       const { StockService } = await import('./stock-service')
       
-      // Add to stock
-      await StockService.updateStock(
+      // Add to stock using unified method
+      await StockService.addOrUpdateStock(
         orderItem.sku_id,
         orderItem.part_type,
         quantity,
-        `Received from order ${itemId.substring(0, 8)}`,
-        userId
+        'ADD', // ADD mode - add received quantity to existing stock
+        'ORDER_RECEIVED',
+        {
+          notes: `Received from order ${itemId.substring(0, 8)}`,
+          userId,
+        }
       )
 
       // Update order status

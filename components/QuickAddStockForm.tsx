@@ -203,14 +203,17 @@ export function QuickAddStockForm({ onStockAdded }: QuickAddStockFormProps) {
         }
       }
       
-      await StockService.setStock(
+      await StockService.addOrUpdateStock(
         selectedSKU.id,
         partType.toUpperCase(),
         qty,
-        isNaN(thresh) ? 5 : thresh,
-        `Quick add: ${selectedSKU.sku_code || selectedSKU.id}`,
-        undefined,
-        finalTrackingNumber || undefined
+        'ADD', // Always ADD to existing quantity (not SET)
+        'QUICK_ADD',
+        {
+          lowStockThreshold: isNaN(thresh) ? 5 : thresh,
+          notes: `Quick add: ${selectedSKU.sku_code || selectedSKU.id}`,
+          trackingNumber: finalTrackingNumber || undefined,
+        }
       )
 
       setSuccess(`Stock added successfully! Transaction history has been recorded.`)

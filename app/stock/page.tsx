@@ -255,12 +255,16 @@ export default function StockPage() {
             continue
           }
 
-          await StockService.setStock(
+          await StockService.addOrUpdateStock(
             row.selectedSKU.id,
             row.partType.trim().toUpperCase(),
             quantity,
-            isNaN(threshold) ? 5 : threshold,
-            `Bulk entry: ${row.selectedSKU.sku_code || row.selectedSKU.id}`
+            'ADD', // ADD mode - add to existing stock
+            'BULK_ENTRY',
+            {
+              lowStockThreshold: isNaN(threshold) ? 5 : threshold,
+              notes: `Bulk entry: ${row.selectedSKU.sku_code || row.selectedSKU.id}`,
+            }
           )
 
           successCount++

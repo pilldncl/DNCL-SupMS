@@ -38,15 +38,18 @@ export function UpdateNotesModal({
     try {
       setSubmitting(true)
       
-      // Update just the notes using setStock with existing values
-      await StockService.setStock(
+      // Update just the notes using unified method with existing values
+      await StockService.addOrUpdateStock(
         stockItem.sku_id,
         stockItem.part_type,
         stockItem.quantity,
-        stockItem.low_stock_threshold,
-        notes.trim() || undefined,
-        undefined,
-        stockItem.tracking_number || undefined
+        'SET', // SET mode to preserve existing quantity
+        'UPDATE_MODAL',
+        {
+          lowStockThreshold: stockItem.low_stock_threshold,
+          notes: notes.trim() || undefined,
+          trackingNumber: stockItem.tracking_number || undefined,
+        }
       )
 
       onNotesUpdated()
@@ -214,4 +217,6 @@ export function UpdateNotesModal({
     </div>
   )
 }
+
+
 

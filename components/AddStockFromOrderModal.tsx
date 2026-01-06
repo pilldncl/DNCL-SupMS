@@ -36,11 +36,15 @@ export function AddStockFromOrderModal({
 
     setSubmitting(true)
     try {
-      await StockService.updateStock(
+      await StockService.addOrUpdateStock(
         orderItem.sku_id,
         orderItem.part_type,
         qty,
-        `Received from order - ${orderItem.id.substring(0, 8)}`
+        'ADD', // ADD mode - add received quantity to existing stock
+        'ORDER_RECEIVED',
+        {
+          notes: `Received from order - ${orderItem.id.substring(0, 8)}`,
+        }
       )
       onStockAdded()
       onClose()

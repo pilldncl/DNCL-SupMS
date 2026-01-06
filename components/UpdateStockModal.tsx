@@ -74,11 +74,15 @@ export function UpdateStockModal({
           return
         }
 
-        await StockService.updateStock(
+        await StockService.addOrUpdateStock(
           stockItem.sku_id,
           stockItem.part_type,
           change,
-          notes || undefined
+          'ADD', // ADD mode for incremental changes
+          'UPDATE_MODAL',
+          {
+            notes: notes || undefined,
+          }
         )
       } else {
         // Set absolute value mode
@@ -108,14 +112,17 @@ export function UpdateStockModal({
           }
         }
         
-        await StockService.setStock(
+        await StockService.addOrUpdateStock(
           stockItem.sku_id,
           stockItem.part_type,
           quantity,
-          threshold,
-          notes || undefined,
-          undefined,
-          finalTrackingNumber || undefined
+          'SET', // SET mode for absolute quantity
+          'UPDATE_MODAL',
+          {
+            lowStockThreshold: threshold,
+            notes: notes || undefined,
+            trackingNumber: finalTrackingNumber || undefined,
+          }
         )
       }
 

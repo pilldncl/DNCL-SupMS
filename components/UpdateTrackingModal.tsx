@@ -116,15 +116,18 @@ export function UpdateTrackingModal({
       
       const finalTrackingNumber = formatTrackingNumber()
       
-      // Update just the tracking number using setStock with existing values
-      await StockService.setStock(
+      // Update just the tracking number using unified method with existing values
+      await StockService.addOrUpdateStock(
         stockItem.sku_id,
         stockItem.part_type,
         stockItem.quantity,
-        stockItem.low_stock_threshold,
-        stockItem.notes || undefined,
-        undefined,
-        finalTrackingNumber || undefined
+        'SET', // SET mode to preserve existing quantity
+        'UPDATE_MODAL',
+        {
+          lowStockThreshold: stockItem.low_stock_threshold,
+          notes: stockItem.notes || undefined,
+          trackingNumber: finalTrackingNumber || undefined,
+        }
       )
 
       onTrackingUpdated()

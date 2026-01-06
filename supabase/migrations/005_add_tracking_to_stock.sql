@@ -14,3 +14,5 @@ CREATE INDEX IF NOT EXISTS idx_supply_order_stock_tracking
 COMMENT ON COLUMN supply_order_stock.tracking_number IS 
   'Optional tracking number for the stock entry';
 
+
+
