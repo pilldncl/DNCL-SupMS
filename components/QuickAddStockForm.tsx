@@ -213,7 +213,7 @@ export function QuickAddStockForm({ onStockAdded }: QuickAddStockFormProps) {
         finalTrackingNumber || undefined
       )
 
-      setSuccess(`Stock added successfully!`)
+      setSuccess(`Stock added successfully! Transaction history has been recorded.`)
       
       // Reset form
       setSelectedSKU(null)

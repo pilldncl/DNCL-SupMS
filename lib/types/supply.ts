@@ -122,3 +122,18 @@ export interface StockUpdate {
   notes?: string
 }
 
+export interface StockTransaction {
+  id: string
+  stock_id: string
+  sku_id: number
+  part_type: string
+  quantity: number // The quantity set/added in this transaction
+  quantity_before?: number | null // Previous quantity before this transaction
+  quantity_after: number // New quantity after this transaction
+  tracking_number?: string | null // Tracking number for this specific transaction
+  notes?: string | null // Notes for this specific transaction
+  transaction_type: 'SET' | 'ADD' | 'SUBTRACT' // Type of transaction
+  created_at: string
+  created_by?: string | null // User who created this transaction
+}
+

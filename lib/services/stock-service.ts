@@ -1,5 +1,5 @@
 import { supabase } from '../supabase/client'
-import type { StockItem, StockUpdate, SKU } from '../types/supply'
+import type { StockItem, StockUpdate, StockTransaction, SKU } from '../types/supply'
 
 /**
  * Service for managing stock/inventory for parts/components
@@ -143,6 +143,7 @@ export class StockService {
 
   /**
    * Update stock (add or remove quantity)
+   * Creates a transaction history entry for each update
    */
   static async updateStock(
     skuId: number,
@@ -157,7 +158,9 @@ export class StockService {
 
       if (existing) {
         // Update existing stock
+        const quantityBefore = existing.quantity
         const newQuantity = Math.max(0, existing.quantity + quantityChange) // Don't go below 0
+        const transactionType = quantityChange >= 0 ? 'ADD' : 'SUBTRACT'
 
         const { data, error } = await supabase
           .from('supply_order_stock')
@@ -179,6 +182,22 @@ export class StockService {
           console.error('Error updating stock:', error)
           throw error
         }
+
+        // Create transaction history entry
+        await supabase
+          .from('supply_order_stock_transactions')
+          .insert({
+            stock_id: data.id,
+            sku_id: skuId,
+            part_type: partType,
+            quantity: Math.abs(quantityChange),
+            quantity_before: quantityBefore,
+            quantity_after: newQuantity,
+            tracking_number: null,
+            notes: notes || null,
+            transaction_type: transactionType,
+            created_by: userId || null,
+          })
 
         // Get part type display name
         const { data: partTypeData } = await supabase
@@ -220,6 +239,22 @@ export class StockService {
           throw error
         }
 
+        // Create transaction history entry for new stock
+        await supabase
+          .from('supply_order_stock_transactions')
+          .insert({
+            stock_id: data.id,
+            sku_id: skuId,
+            part_type: partType,
+            quantity: quantityChange,
+            quantity_before: 0,
+            quantity_after: quantityChange,
+            tracking_number: null,
+            notes: notes || null,
+            transaction_type: 'ADD',
+            created_by: userId || null,
+          })
+
         // Get part type display name
         const { data: partTypeData } = await supabase
           .from('supply_order_part_types')
@@ -242,6 +277,7 @@ export class StockService {
 
   /**
    * Set absolute stock quantity (instead of relative change)
+   * Creates a transaction history entry for each update
    */
   static async setStock(
     skuId: number,
@@ -254,13 +290,15 @@ export class StockService {
   ): Promise<StockItem> {
     try {
       const existing = await this.getStockItem(skuId, partType)
+      const quantityBefore = existing?.quantity ?? 0
+      const newQuantity = Math.max(0, quantity)
 
       if (existing) {
         // Update existing
         const { data, error } = await supabase
           .from('supply_order_stock')
           .update({
-            quantity: Math.max(0, quantity),
+            quantity: newQuantity,
             low_stock_threshold: lowStockThreshold ?? existing.low_stock_threshold,
             last_updated: new Date().toISOString(),
             updated_by: userId || null,
@@ -279,6 +317,22 @@ export class StockService {
           console.error('Error setting stock:', error)
           throw error
         }
+
+        // Create transaction history entry
+        await supabase
+          .from('supply_order_stock_transactions')
+          .insert({
+            stock_id: data.id,
+            sku_id: skuId,
+            part_type: partType,
+            quantity: newQuantity,
+            quantity_before: quantityBefore,
+            quantity_after: newQuantity,
+            tracking_number: trackingNumber || null,
+            notes: notes || null,
+            transaction_type: 'SET',
+            created_by: userId || null,
+          })
 
         // Get part type display name
         const { data: partTypeData } = await supabase
@@ -300,7 +354,7 @@ export class StockService {
           .insert({
             sku_id: skuId,
             part_type: partType,
-            quantity: Math.max(0, quantity),
+            quantity: newQuantity,
             low_stock_threshold: lowStockThreshold ?? 5,
             last_updated: new Date().toISOString(),
             updated_by: userId || null,
@@ -317,6 +371,22 @@ export class StockService {
           console.error('Error creating stock item:', error)
           throw error
         }
+
+        // Create transaction history entry for new stock
+        await supabase
+          .from('supply_order_stock_transactions')
+          .insert({
+            stock_id: data.id,
+            sku_id: skuId,
+            part_type: partType,
+            quantity: newQuantity,
+            quantity_before: 0,
+            quantity_after: newQuantity,
+            tracking_number: trackingNumber || null,
+            notes: notes || null,
+            transaction_type: 'SET',
+            created_by: userId || null,
+          })
 
         // Get part type display name
         const { data: partTypeData } = await supabase
@@ -433,6 +503,68 @@ export class StockService {
       })) as StockItem[]
     } catch (error) {
       console.error('Error in getLatestArrivals:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get transaction history for a specific stock item
+   */
+  static async getStockTransactionHistory(
+    skuId: number,
+    partType: string,
+    limit?: number
+  ): Promise<StockTransaction[]> {
+    try {
+      let query = supabase
+        .from('supply_order_stock_transactions')
+        .select('*')
+        .eq('sku_id', skuId)
+        .eq('part_type', partType)
+        .order('created_at', { ascending: false })
+
+      if (limit) {
+        query = query.limit(limit)
+      }
+
+      const { data, error } = await query
+
+      if (error) {
+        console.error('Error fetching stock transaction history:', error)
+        throw error
+      }
+
+      return (data || []) as StockTransaction[]
+    } catch (error) {
+      console.error('Error in getStockTransactionHistory:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get all transaction history (across all stock items)
+   */
+  static async getAllTransactionHistory(limit?: number): Promise<StockTransaction[]> {
+    try {
+      let query = supabase
+        .from('supply_order_stock_transactions')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (limit) {
+        query = query.limit(limit)
+      }
+
+      const { data, error } = await query
+
+      if (error) {
+        console.error('Error fetching all transaction history:', error)
+        throw error
+      }
+
+      return (data || []) as StockTransaction[]
+    } catch (error) {
+      console.error('Error in getAllTransactionHistory:', error)
       throw error
     }
   }

@@ -9,6 +9,7 @@ import { TopBar } from '@/components/TopBar'
 import { UpdateStockModal } from '@/components/UpdateStockModal'
 import { UpdateTrackingModal } from '@/components/UpdateTrackingModal'
 import { UpdateNotesModal } from '@/components/UpdateNotesModal'
+import { StockTransactionHistoryModal } from '@/components/StockTransactionHistoryModal'
 import { SKUAutocomplete } from '@/components/SKUAutocomplete'
 import { AddSKUModal } from '@/components/AddSKUModal'
 import { AddPartTypeModal } from '@/components/AddPartTypeModal'
@@ -41,6 +42,8 @@ export default function StockPage() {
   const [selectedTrackingItem, setSelectedTrackingItem] = useState<StockItem | null>(null)
   const [showNotesModal, setShowNotesModal] = useState(false)
   const [selectedNotesItem, setSelectedNotesItem] = useState<StockItem | null>(null)
+  const [showHistoryModal, setShowHistoryModal] = useState(false)
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState<StockItem | null>(null)
 
   // Bulk Entry State
   const [bulkRows, setBulkRows] = useState<BulkEntryRow[]>([
@@ -106,6 +109,11 @@ export default function StockPage() {
   const handleUpdateNotes = (item: StockItem) => {
     setSelectedNotesItem(item)
     setShowNotesModal(true)
+  }
+
+  const handleViewHistory = (item: StockItem) => {
+    setSelectedHistoryItem(item)
+    setShowHistoryModal(true)
   }
 
   const handleStockUpdated = () => {
@@ -659,6 +667,26 @@ export default function StockPage() {
                             <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
                               <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
                                 <button
+                                  onClick={() => handleViewHistory(item)}
+                                  style={{
+                                    padding: '0.5rem 0.75rem',
+                                    backgroundColor: '#f3f4f6',
+                                    color: '#374151',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '500',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.25rem',
+                                  }}
+                                  title="View transaction history"
+                                >
+                                  <span>📊</span>
+                                  <span>History</span>
+                                </button>
+                                <button
                                   onClick={() => handleUpdateNotes(item)}
                                   style={{
                                     padding: '0.5rem 0.75rem',
@@ -1065,6 +1093,18 @@ export default function StockPage() {
             isOpen={showAddPartTypeModal}
             onClose={() => setShowAddPartTypeModal(false)}
             onPartTypeAdded={handlePartTypeAdded}
+          />
+        )}
+
+        {/* Stock Transaction History Modal */}
+        {showHistoryModal && selectedHistoryItem && (
+          <StockTransactionHistoryModal
+            isOpen={showHistoryModal}
+            onClose={() => {
+              setShowHistoryModal(false)
+              setSelectedHistoryItem(null)
+            }}
+            stockItem={selectedHistoryItem}
           />
         )}
       </main>
