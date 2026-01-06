@@ -126,7 +126,9 @@ export interface StockTransaction {
   id: string
   stock_id: string
   sku_id: number
+  sku?: SKU // Populated when fetching with join
   part_type: string
+  part_type_display?: string // Populated from part_types table
   quantity: number // The quantity set/added in this transaction
   quantity_before?: number | null // Previous quantity before this transaction
   quantity_after: number // New quantity after this transaction
