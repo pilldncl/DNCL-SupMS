@@ -140,3 +140,18 @@ export interface StockTransaction {
   created_by?: string | null // User who created this transaction
 }
 
+export interface DailyTransactionReport {
+  date: string
+  transactions: StockTransaction[]
+  summary: {
+    totalTransactions: number
+    totalAdded: number
+    totalSubtracted: number
+    totalSet: number
+    bySource: Record<string, number>
+    byType: Record<string, number>
+    uniqueSKUs: number
+    uniquePartTypes: number
+  }
+}
+

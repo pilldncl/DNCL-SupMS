@@ -28,6 +28,7 @@ export function Sidebar() {
     { href: '/stock', label: 'Stock', icon: '📦' },
     { href: '/skus', label: 'SKUs', icon: '🔍' },
     { href: '/transactions', label: 'Transactions', icon: '📝' },
+    { href: '/daily-report', label: 'Daily Report', icon: '📅' },
   ]
 
   const handleLinkClick = () => {

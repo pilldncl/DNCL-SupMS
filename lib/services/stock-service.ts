@@ -692,5 +692,287 @@ export class StockService {
       throw error
     }
   }
+
+  /**
+   * Get daily transaction report from pre-aggregated summary table
+   * Falls back to calculating on-the-fly if summary doesn't exist
+   */
+  static async getDailyTransactionReport(targetDate?: Date): Promise<{
+    date: string
+    transactions: StockTransaction[]
+    summary: {
+      totalTransactions: number
+      totalAdded: number
+      totalSubtracted: number
+      totalSet: number
+      bySource: Record<string, number>
+      byType: Record<string, number>
+      uniqueSKUs: number
+      uniquePartTypes: number
+    }
+  } | null> {
+    try {
+      // First, try to get from pre-aggregated summary table
+      const date = targetDate || new Date()
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const dateString = `${year}-${month}-${day}`
+      
+      // Check if summary exists
+      const { data: summaryData, error: summaryError } = await supabase
+        .from('supply_order_daily_report_summary')
+        .select('*')
+        .eq('report_date', dateString)
+        .single()
+      
+      if (!summaryError && summaryData) {
+        console.log('[DailyReport] Using pre-aggregated summary for:', dateString)
+        
+        // Get transactions for the day
+        const startOfDay = new Date(year, date.getMonth(), date.getDate(), 0, 0, 0, 0)
+        const endOfDay = new Date(year, date.getMonth(), date.getDate(), 23, 59, 59, 999)
+        
+        const { data: transactions, error: transError } = await supabase
+          .from('supply_order_stock_transactions')
+          .select(`
+            *,
+            sku:sku_master!sku_id (*)
+          `)
+          .gte('created_at', startOfDay.toISOString())
+          .lte('created_at', endOfDay.toISOString())
+          .order('created_at', { ascending: false })
+        
+        if (transError) {
+          console.error('[DailyReport] Error fetching transactions:', transError)
+          throw transError
+        }
+        
+        // Fetch part type display names
+        let partTypeMap = new Map<string, string>()
+        if (transactions && transactions.length > 0) {
+          const uniquePartTypes = Array.from(new Set(transactions.map((item: any) => item.part_type)))
+          const { data: partTypesData } = await supabase
+            .from('supply_order_part_types')
+            .select('name, display_name')
+            .in('name', uniquePartTypes)
+          
+          partTypeMap = new Map(
+            (partTypesData || []).map(pt => [pt.name, pt.display_name])
+          )
+        }
+        
+        const formattedTransactions = (transactions || []).map((item: any) => ({
+          ...item,
+          sku: item.sku || undefined,
+          part_type_display: partTypeMap.get(item.part_type) || item.part_type,
+        })) as StockTransaction[]
+        
+        // Convert JSONB to Record
+        const bySource = (summaryData.by_source as Record<string, number>) || {}
+        const byType = (summaryData.by_type as Record<string, number>) || {}
+        
+        return {
+          date: dateString,
+          transactions: formattedTransactions,
+          summary: {
+            totalTransactions: summaryData.total_transactions || 0,
+            totalAdded: summaryData.total_added || 0,
+            totalSubtracted: summaryData.total_subtracted || 0,
+            totalSet: summaryData.total_set_operations || 0,
+            bySource,
+            byType,
+            uniqueSKUs: summaryData.unique_skus || 0,
+            uniquePartTypes: summaryData.unique_part_types || 0,
+          }
+        }
+      }
+      
+      // Fallback to on-the-fly calculation if summary doesn't exist
+      console.log('[DailyReport] Summary not found, calculating on-the-fly for:', dateString)
+      return await this.calculateDailyReportOnTheFly(targetDate)
+    } catch (error) {
+      console.error('[DailyReport] Error in getDailyTransactionReport:', error)
+      // Fallback to on-the-fly calculation on error
+      return await this.calculateDailyReportOnTheFly(targetDate)
+    }
+  }
+
+  /**
+   * Calculate daily report on-the-fly (fallback method)
+   * This is used when pre-aggregated summary doesn't exist
+   */
+  private static async calculateDailyReportOnTheFly(targetDate?: Date): Promise<{
+    date: string
+    transactions: StockTransaction[]
+    summary: {
+      totalTransactions: number
+      totalAdded: number
+      totalSubtracted: number
+      totalSet: number
+      bySource: Record<string, number>
+      byType: Record<string, number>
+      uniqueSKUs: number
+      uniquePartTypes: number
+    }
+  } | null> {
+    // Use the original calculation logic as fallback
+    const date = targetDate || new Date()
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const dateString = `${year}-${month}-${day}`
+    
+    const startOfDay = new Date(year, date.getMonth(), date.getDate(), 0, 0, 0, 0)
+    const endOfDay = new Date(year, date.getMonth(), date.getDate(), 23, 59, 59, 999)
+
+    console.log('[DailyReport] Calculating on-the-fly for:', {
+      dateString,
+      startOfDay: startOfDay.toISOString(),
+      endOfDay: endOfDay.toISOString(),
+    })
+
+    const { data, error } = await supabase
+      .from('supply_order_stock_transactions')
+      .select(`
+        *,
+        sku:sku_master!sku_id (*)
+      `)
+      .gte('created_at', startOfDay.toISOString())
+      .lte('created_at', endOfDay.toISOString())
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('[DailyReport] Database error:', error)
+      throw new Error(`Database error: ${error.message || JSON.stringify(error)}`)
+    }
+
+    console.log('[DailyReport] Query result:', {
+      dataLength: data?.length || 0,
+      hasData: !!data,
+    })
+
+    if (!data || data.length === 0) {
+      console.log('[DailyReport] No transactions found for date:', dateString)
+      return null
+    }
+
+    // Fetch part type display names
+    const uniquePartTypes = Array.from(new Set(data.map((item: any) => item.part_type)))
+    const { data: partTypesData } = await supabase
+      .from('supply_order_part_types')
+      .select('name, display_name')
+      .in('name', uniquePartTypes)
+    
+    const partTypeMap = new Map(
+      (partTypesData || []).map(pt => [pt.name, pt.display_name])
+    )
+
+    const transactions = data.map((item: any) => ({
+      ...item,
+      sku: item.sku || undefined,
+      part_type_display: partTypeMap.get(item.part_type) || item.part_type,
+    })) as StockTransaction[]
+
+    // Calculate summary statistics
+    const summary = {
+      totalTransactions: transactions.length,
+      totalAdded: transactions
+        .filter(t => t.transaction_type === 'ADD')
+        .reduce((sum, t) => sum + t.quantity, 0),
+      totalSubtracted: transactions
+        .filter(t => t.transaction_type === 'SUBTRACT')
+        .reduce((sum, t) => sum + t.quantity, 0),
+      totalSet: transactions
+        .filter(t => t.transaction_type === 'SET')
+        .length,
+      bySource: {} as Record<string, number>,
+      byType: {} as Record<string, number>,
+      uniqueSKUs: new Set(transactions.map(t => t.sku_id)).size,
+      uniquePartTypes: new Set(transactions.map(t => t.part_type)).size,
+    }
+
+    // Count by source
+    transactions.forEach(t => {
+      const source = t.source || 'MANUAL'
+      summary.bySource[source] = (summary.bySource[source] || 0) + 1
+    })
+
+    // Count by type
+    transactions.forEach(t => {
+      summary.byType[t.transaction_type] = (summary.byType[t.transaction_type] || 0) + 1
+    })
+
+    return {
+      date: dateString,
+      transactions,
+      summary,
+    }
+  }
+
+  /**
+   * Backfill daily report summaries for existing transactions
+   * Call this once after migration to populate historical data
+   */
+  static async backfillDailyReports(startDate?: Date, endDate?: Date): Promise<number> {
+    try {
+      const start = startDate ? startDate.toISOString().split('T')[0] : null
+      const end = endDate ? endDate.toISOString().split('T')[0] : null
+      
+      const { data, error } = await supabase.rpc('backfill_daily_reports', {
+        start_date: start,
+        end_date: end,
+      })
+
+      if (error) {
+        console.error('[DailyReport] Error backfilling reports:', error)
+        throw error
+      }
+
+      console.log('[DailyReport] Backfilled', data, 'daily reports')
+      return data || 0
+    } catch (error) {
+      console.error('[DailyReport] Error in backfillDailyReports:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Get available dates that have transactions (for date picker)
+   */
+  static async getAvailableReportDates(limit: number = 30): Promise<string[]> {
+    try {
+      console.log('[DailyReport] Fetching available dates, limit:', limit)
+      const { data, error } = await supabase
+        .from('supply_order_stock_transactions')
+        .select('created_at')
+        .order('created_at', { ascending: false })
+        .limit(limit * 10) // Get more records to ensure we have enough unique dates
+
+      if (error) {
+        console.error('[DailyReport] Error fetching available report dates:', error)
+        throw error
+      }
+
+      console.log('[DailyReport] Raw dates fetched:', data?.length || 0)
+
+      // Extract unique dates
+      const uniqueDates = new Set<string>()
+      data?.forEach(item => {
+        const date = new Date(item.created_at).toISOString().split('T')[0]
+        uniqueDates.add(date)
+      })
+
+      const result = Array.from(uniqueDates)
+        .sort((a, b) => b.localeCompare(a))
+        .slice(0, limit)
+      
+      console.log('[DailyReport] Unique dates found:', result.length)
+      return result
+    } catch (error) {
+      console.error('[DailyReport] Error in getAvailableReportDates:', error)
+      throw error
+    }
+  }
 }
 

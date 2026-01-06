@@ -20,7 +20,6 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <Provider>
-          <SystemNotification />
           <div style={{ flex: 1 }}>
             {children}
           </div>
