@@ -133,6 +133,7 @@ export interface StockTransaction {
   tracking_number?: string | null // Tracking number for this specific transaction
   notes?: string | null // Notes for this specific transaction
   transaction_type: 'SET' | 'ADD' | 'SUBTRACT' // Type of transaction
+  source?: 'QUICK_ADD' | 'UPDATE_MODAL' | 'BULK_ENTRY' | 'ORDER_RECEIVED' | 'MANUAL' | null // Source of transaction
   created_at: string
   created_by?: string | null // User who created this transaction
 }

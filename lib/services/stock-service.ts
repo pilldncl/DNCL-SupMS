@@ -233,6 +233,7 @@ export class StockService {
             tracking_number: options?.trackingNumber || null,
             notes: options?.notes || null,
             transaction_type: transactionType,
+            source: source,
             created_by: options?.userId || null,
           })
 
@@ -299,6 +300,7 @@ export class StockService {
             tracking_number: options?.trackingNumber || null,
             notes: options?.notes || null,
             transaction_type: 'ADD',
+            source: source,
             created_by: options?.userId || null,
           })
 
@@ -605,7 +607,10 @@ export class StockService {
     try {
       let query = supabase
         .from('supply_order_stock_transactions')
-        .select('*')
+        .select(`
+          *,
+          sku:sku_master!sku_id (*)
+        `)
         .eq('sku_id', skuId)
         .eq('part_type', partType)
         .order('created_at', { ascending: false })
@@ -621,7 +626,18 @@ export class StockService {
         throw error
       }
 
-      return (data || []) as StockTransaction[]
+      // Fetch part type display name
+      const { data: partTypeData } = await supabase
+        .from('supply_order_part_types')
+        .select('display_name')
+        .eq('name', partType)
+        .single()
+
+      return (data || []).map((item: any) => ({
+        ...item,
+        sku: item.sku || undefined,
+        part_type_display: partTypeData?.display_name || partType,
+      })) as StockTransaction[]
     } catch (error) {
       console.error('Error in getStockTransactionHistory:', error)
       throw error
@@ -635,7 +651,10 @@ export class StockService {
     try {
       let query = supabase
         .from('supply_order_stock_transactions')
-        .select('*')
+        .select(`
+          *,
+          sku:sku_master!sku_id (*)
+        `)
         .order('created_at', { ascending: false })
 
       if (limit) {
@@ -649,7 +668,25 @@ export class StockService {
         throw error
       }
 
-      return (data || []) as StockTransaction[]
+      // Fetch part type display names
+      let partTypeMap = new Map<string, string>()
+      if (data && data.length > 0) {
+        const uniquePartTypes = Array.from(new Set(data.map((item: any) => item.part_type)))
+        const { data: partTypesData } = await supabase
+          .from('supply_order_part_types')
+          .select('name, display_name')
+          .in('name', uniquePartTypes)
+        
+        partTypeMap = new Map(
+          (partTypesData || []).map(pt => [pt.name, pt.display_name])
+        )
+      }
+
+      return (data || []).map((item: any) => ({
+        ...item,
+        sku: item.sku || undefined,
+        part_type_display: partTypeMap.get(item.part_type) || item.part_type,
+      })) as StockTransaction[]
     } catch (error) {
       console.error('Error in getAllTransactionHistory:', error)
       throw error

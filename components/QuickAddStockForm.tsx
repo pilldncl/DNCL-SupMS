@@ -28,6 +28,8 @@ export function QuickAddStockForm({ onStockAdded }: QuickAddStockFormProps) {
   const [trackingFormat, setTrackingFormat] = useState<'standard' | 'international' | 'custom'>('standard')
   const [customPrefix, setCustomPrefix] = useState('')
   const [customSuffix, setCustomSuffix] = useState('')
+  const [quantityMode, setQuantityMode] = useState<'ADD' | 'SET'>('ADD') // Flexible mode: ADD or SET
+  const [currentStock, setCurrentStock] = useState<number | null>(null) // Track current stock for display
   const [partTypes, setPartTypes] = useState<PartType[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -63,7 +65,7 @@ export function QuickAddStockForm({ onStockAdded }: QuickAddStockFormProps) {
     }
   }
 
-  const handleSKUSelect = (sku: SKU | null) => {
+  const handleSKUSelect = async (sku: SKU | null) => {
     setSelectedSKU(sku)
     if (sku) {
       // Use the formatted display string that SKUAutocomplete provides
@@ -79,8 +81,19 @@ export function QuickAddStockForm({ onStockAdded }: QuickAddStockFormProps) {
         display = display ? `${display} (${sku.sku_code})` : sku.sku_code
       }
       setSkuCode(display || `SKU ${sku.id}`)
+      
+      // Load current stock if part type is already selected
+      if (partType) {
+        try {
+          const stockItem = await StockService.getStockItem(sku.id, partType.toUpperCase())
+          setCurrentStock(stockItem?.quantity ?? null)
+        } catch (err) {
+          setCurrentStock(null)
+        }
+      }
     } else {
       setSkuCode('')
+      setCurrentStock(null)
     }
   }
 
@@ -207,16 +220,16 @@ export function QuickAddStockForm({ onStockAdded }: QuickAddStockFormProps) {
         selectedSKU.id,
         partType.toUpperCase(),
         qty,
-        'ADD', // Always ADD to existing quantity (not SET)
+        quantityMode, // Use selected mode: ADD or SET
         'QUICK_ADD',
         {
           lowStockThreshold: isNaN(thresh) ? 5 : thresh,
-          notes: `Quick add: ${selectedSKU.sku_code || selectedSKU.id}`,
+          notes: `Quick ${quantityMode === 'ADD' ? 'add' : 'set'}: ${selectedSKU.sku_code || selectedSKU.id}`,
           trackingNumber: finalTrackingNumber || undefined,
         }
       )
 
-      setSuccess(`Stock added successfully! Transaction history has been recorded.`)
+      setSuccess(`Stock ${quantityMode === 'ADD' ? 'added' : 'set'} successfully! Transaction history has been recorded.`)
       
       // Reset form
       setSelectedSKU(null)
@@ -228,6 +241,8 @@ export function QuickAddStockForm({ onStockAdded }: QuickAddStockFormProps) {
       setTrackingFormat('standard')
       setCustomPrefix('')
       setCustomSuffix('')
+      setQuantityMode('ADD') // Reset to default
+      setCurrentStock(null)
       
       // Refresh stock list
       onStockAdded()
@@ -315,9 +330,9 @@ export function QuickAddStockForm({ onStockAdded }: QuickAddStockFormProps) {
             <form onSubmit={handleSubmit}>
           <div style={{
             display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : '2fr 1.5fr 1fr 1fr 1.5fr auto',
+            gridTemplateColumns: isMobile ? '1fr' : '2fr 1.5fr 1.5fr 1fr 1.5fr auto',
             gap: '0.75rem',
-            alignItems: 'end',
+            alignItems: isMobile ? 'stretch' : 'end',
           }}>
             {/* SKU Search */}
             <div>
@@ -358,14 +373,24 @@ export function QuickAddStockForm({ onStockAdded }: QuickAddStockFormProps) {
               </label>
               <select
                 value={partType}
-                onChange={(e) => {
+                onChange={async (e) => {
                   const value = e.target.value
                   if (value === '__ADD_NEW__') {
                     setShowAddPartTypeModal(true)
                     // Reset to empty to keep dropdown in "Select..." state
                     setPartType('')
+                    setCurrentStock(null)
                   } else {
                     setPartType(value)
+                    // Load current stock when part type is selected
+                    if (selectedSKU && value) {
+                      try {
+                        const stockItem = await StockService.getStockItem(selectedSKU.id, value.toUpperCase())
+                        setCurrentStock(stockItem?.quantity ?? null)
+                      } catch (err) {
+                        setCurrentStock(null)
+                      }
+                    }
                   }
                 }}
                 disabled={submitting || !selectedSKU}
@@ -395,20 +420,57 @@ export function QuickAddStockForm({ onStockAdded }: QuickAddStockFormProps) {
 
             {/* Quantity */}
             <div>
-              <label style={{ 
-                display: 'block', 
-                marginBottom: '0.5rem', 
-                fontSize: '0.875rem',
-                fontWeight: '500',
-                color: '#374151',
-              }}>
-                Quantity
-              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <label style={{ 
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  color: '#374151',
+                }}>
+                  Quantity
+                </label>
+                {/* Mode Toggle */}
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <label style={{ 
+                    fontSize: '0.75rem', 
+                    color: '#6b7280',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                  }}>
+                    <input
+                      type="radio"
+                      checked={quantityMode === 'ADD'}
+                      onChange={() => setQuantityMode('ADD')}
+                      disabled={submitting || !selectedSKU}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <span>Add</span>
+                  </label>
+                  <label style={{ 
+                    fontSize: '0.75rem', 
+                    color: '#6b7280',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
+                  }}>
+                    <input
+                      type="radio"
+                      checked={quantityMode === 'SET'}
+                      onChange={() => setQuantityMode('SET')}
+                      disabled={submitting || !selectedSKU}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <span>Set</span>
+                  </label>
+                </div>
+              </div>
               <input
                 type="number"
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
-                placeholder="0"
+                placeholder={quantityMode === 'ADD' ? "e.g., 200" : "e.g., 400"}
                 min="0"
                 required
                 disabled={submitting || !selectedSKU}
@@ -421,6 +483,27 @@ export function QuickAddStockForm({ onStockAdded }: QuickAddStockFormProps) {
                   backgroundColor: selectedSKU ? 'white' : '#f3f4f6',
                 }}
               />
+              {currentStock !== null && (
+                <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
+                  Current: <strong>{currentStock}</strong>
+                  {quantityMode === 'ADD' && quantity && !isNaN(parseInt(quantity, 10)) && (
+                    <span> → <strong>{currentStock + parseInt(quantity, 10)}</strong></span>
+                  )}
+                  {quantityMode === 'SET' && quantity && !isNaN(parseInt(quantity, 10)) && (
+                    <span> → <strong>{parseInt(quantity, 10)}</strong></span>
+                  )}
+                </div>
+              )}
+              {quantityMode === 'ADD' && (
+                <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem', margin: 0 }}>
+                  Adds to existing stock
+                </p>
+              )}
+              {quantityMode === 'SET' && (
+                <p style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem', margin: 0 }}>
+                  Sets absolute quantity
+                </p>
+              )}
             </div>
 
             {/* Threshold */}

@@ -190,6 +190,27 @@ export function StockTransactionHistoryModal({
                         }}>
                           {transaction.transaction_type}
                         </span>
+                        {transaction.source && (
+                          <span style={{
+                            padding: '0.25rem 0.75rem',
+                            backgroundColor: transaction.source === 'QUICK_ADD' ? '#dbeafe' :
+                              transaction.source === 'UPDATE_MODAL' ? '#fef3c7' :
+                              transaction.source === 'BULK_ENTRY' ? '#e0e7ff' :
+                              transaction.source === 'ORDER_RECEIVED' ? '#dcfce7' : '#f3f4f6',
+                            color: transaction.source === 'QUICK_ADD' ? '#1e40af' :
+                              transaction.source === 'UPDATE_MODAL' ? '#92400e' :
+                              transaction.source === 'BULK_ENTRY' ? '#3730a3' :
+                              transaction.source === 'ORDER_RECEIVED' ? '#166534' : '#6b7280',
+                            borderRadius: '12px',
+                            fontSize: '0.75rem',
+                            fontWeight: '500',
+                          }}>
+                            {transaction.source === 'QUICK_ADD' ? 'Quick Add' :
+                              transaction.source === 'UPDATE_MODAL' ? 'Update Modal' :
+                              transaction.source === 'BULK_ENTRY' ? 'Bulk Entry' :
+                              transaction.source === 'ORDER_RECEIVED' ? 'Order Received' : 'Manual'}
+                          </span>
+                        )}
                         {transaction.tracking_number && (
                           <span style={{
                             padding: '0.25rem 0.75rem',
