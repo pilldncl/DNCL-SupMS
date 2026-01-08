@@ -654,6 +654,21 @@ export default function DailyReportPage() {
                                                   minute: '2-digit',
                                                 })}
                                               </div>
+                                              {transaction.tracking_number && (
+                                                <div style={{ marginTop: '0.25rem' }}>
+                                                  <span style={{
+                                                    padding: '0.125rem 0.375rem',
+                                                    backgroundColor: '#fef3c7',
+                                                    color: '#92400e',
+                                                    borderRadius: '4px',
+                                                    fontSize: '0.65rem',
+                                                    fontWeight: '500',
+                                                    fontFamily: 'monospace',
+                                                  }}>
+                                                    📦 {transaction.tracking_number}
+                                                  </span>
+                                                </div>
+                                              )}
                                             </div>
                                             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                                               <span style={{
@@ -691,6 +706,7 @@ export default function DailyReportPage() {
                                         <th style={{ padding: '0.5rem 1rem', textAlign: 'left', fontSize: '0.7rem', fontWeight: '600', color: '#6b7280' }}>Part Type</th>
                                         <th style={{ padding: '0.5rem 1rem', textAlign: 'center', fontSize: '0.7rem', fontWeight: '600', color: '#6b7280' }}>Type</th>
                                         <th style={{ padding: '0.5rem 1rem', textAlign: 'right', fontSize: '0.7rem', fontWeight: '600', color: '#6b7280' }}>Quantity</th>
+                                        <th style={{ padding: '0.5rem 1rem', textAlign: 'left', fontSize: '0.7rem', fontWeight: '600', color: '#6b7280' }}>Tracking</th>
                                         <th style={{ padding: '0.5rem 1rem', textAlign: 'left', fontSize: '0.7rem', fontWeight: '600', color: '#6b7280' }}>Source</th>
                                       </tr>
                                     </thead>
@@ -731,6 +747,23 @@ export default function DailyReportPage() {
                                             <td style={{ padding: '0.5rem 1rem', textAlign: 'right', fontSize: '0.75rem', fontWeight: '600', color: typeColor.color }}>
                                               {transaction.transaction_type === 'SUBTRACT' ? '-' : transaction.transaction_type === 'SET' ? '' : '+'}
                                               {transaction.quantity}
+                                            </td>
+                                            <td style={{ padding: '0.5rem 1rem', fontSize: '0.75rem', color: '#6b7280' }}>
+                                              {transaction.tracking_number ? (
+                                                <span style={{
+                                                  padding: '0.25rem 0.5rem',
+                                                  backgroundColor: '#fef3c7',
+                                                  color: '#92400e',
+                                                  borderRadius: '4px',
+                                                  fontSize: '0.7rem',
+                                                  fontWeight: '500',
+                                                  fontFamily: 'monospace',
+                                                }}>
+                                                  📦 {transaction.tracking_number}
+                                                </span>
+                                              ) : (
+                                                <span style={{ color: '#d1d5db', fontSize: '0.7rem' }}>—</span>
+                                              )}
                                             </td>
                                             <td style={{ padding: '0.5rem 1rem' }}>
                                               <span style={{
