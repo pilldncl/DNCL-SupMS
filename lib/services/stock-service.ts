@@ -37,12 +37,16 @@ export class StockService {
         )
       }
 
-      return (data || []).map((item: any) => ({
-        ...item,
-        sku: item.sku || undefined,
-        part_type_display: partTypeMap.get(item.part_type) || item.part_type,
-        is_low_stock: item.quantity <= item.low_stock_threshold,
-      })) as StockItem[]
+      return (data || []).map((item: any) => {
+        // Threshold is disabled if set to 999999 or higher
+        const thresholdDisabled = item.low_stock_threshold >= 999999
+        return {
+          ...item,
+          sku: item.sku || undefined,
+          part_type_display: partTypeMap.get(item.part_type) || item.part_type,
+          is_low_stock: thresholdDisabled ? false : item.quantity <= item.low_stock_threshold,
+        }
+      }) as StockItem[]
     } catch (error) {
       console.error('Error in getAllStock:', error)
       throw error
@@ -79,11 +83,13 @@ export class StockService {
         .eq('name', partType)
         .single()
 
+      // Threshold is disabled if set to 999999 or higher
+      const thresholdDisabled = data.low_stock_threshold >= 999999
       return {
         ...data,
         sku: data.sku || undefined,
         part_type_display: partTypeData?.display_name || partType,
-        is_low_stock: data.quantity <= data.low_stock_threshold,
+        is_low_stock: thresholdDisabled ? false : data.quantity <= data.low_stock_threshold,
       } as StockItem
     } catch (error) {
       console.error('Error in getStockItem:', error)
@@ -250,11 +256,13 @@ export class StockService {
           .eq('name', partType)
           .single()
 
+        // Threshold is disabled if set to 999999 or higher
+        const thresholdDisabled = data.low_stock_threshold >= 999999
         return {
           ...data,
           sku: data.sku || undefined,
           part_type_display: partTypeData?.display_name || partType,
-          is_low_stock: data.quantity <= data.low_stock_threshold,
+          is_low_stock: thresholdDisabled ? false : data.quantity <= data.low_stock_threshold,
         } as StockItem
       } else {
         // Create new stock item
@@ -316,11 +324,13 @@ export class StockService {
           .eq('name', partType)
           .single()
 
+        // Threshold is disabled if set to 999999 or higher
+        const thresholdDisabled = data.low_stock_threshold >= 999999
         return {
           ...data,
           sku: data.sku || undefined,
           part_type_display: partTypeData?.display_name || partType,
-          is_low_stock: data.quantity <= data.low_stock_threshold,
+          is_low_stock: thresholdDisabled ? false : data.quantity <= data.low_stock_threshold,
         } as StockItem
       }
     } catch (error) {
@@ -394,11 +404,13 @@ export class StockService {
           .eq('name', partType)
           .single()
 
+        // Threshold is disabled if set to 999999 or higher
+        const thresholdDisabled = data.low_stock_threshold >= 999999
         return {
           ...data,
           sku: data.sku || undefined,
           part_type_display: partTypeData?.display_name || partType,
-          is_low_stock: data.quantity <= data.low_stock_threshold,
+          is_low_stock: thresholdDisabled ? false : data.quantity <= data.low_stock_threshold,
         } as StockItem
       } else {
         // Create new stock item
@@ -450,11 +462,13 @@ export class StockService {
           .eq('name', partType)
           .single()
 
+        // Threshold is disabled if set to 999999 or higher
+        const thresholdDisabled = data.low_stock_threshold >= 999999
         return {
           ...data,
           sku: data.sku || undefined,
           part_type_display: partTypeData?.display_name || partType,
-          is_low_stock: data.quantity <= data.low_stock_threshold,
+          is_low_stock: thresholdDisabled ? false : data.quantity <= data.low_stock_threshold,
         } as StockItem
       }
     } catch (error) {
@@ -584,12 +598,16 @@ export class StockService {
         )
       }
 
-      return (data || []).map((item: any) => ({
-        ...item,
-        sku: item.sku || undefined,
-        part_type_display: partTypeMap.get(item.part_type) || item.part_type,
-        is_low_stock: item.quantity <= item.low_stock_threshold,
-      })) as StockItem[]
+      return (data || []).map((item: any) => {
+        // Threshold is disabled if set to 999999 or higher
+        const thresholdDisabled = item.low_stock_threshold >= 999999
+        return {
+          ...item,
+          sku: item.sku || undefined,
+          part_type_display: partTypeMap.get(item.part_type) || item.part_type,
+          is_low_stock: thresholdDisabled ? false : item.quantity <= item.low_stock_threshold,
+        }
+      }) as StockItem[]
     } catch (error) {
       console.error('Error in getLatestArrivals:', error)
       throw error

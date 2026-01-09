@@ -21,6 +21,7 @@ export function UpdateStockModal({
   const [quantityChange, setQuantityChange] = useState<string>('')
   const [absoluteQuantity, setAbsoluteQuantity] = useState<string>('')
   const [lowStockThreshold, setLowStockThreshold] = useState<string>('')
+  const [thresholdDisabled, setThresholdDisabled] = useState<boolean>(false)
   const [trackingNumber, setTrackingNumber] = useState<string>('')
   const [trackingFormat, setTrackingFormat] = useState<'standard' | 'international' | 'custom'>('standard')
   const [customPrefix, setCustomPrefix] = useState<string>('')
@@ -32,7 +33,11 @@ export function UpdateStockModal({
   useEffect(() => {
     if (isOpen) {
       setAbsoluteQuantity(stockItem.quantity.toString())
-      setLowStockThreshold(stockItem.low_stock_threshold.toString())
+      // Check if threshold is disabled (set to a very high number like 999999)
+      const threshold = stockItem.low_stock_threshold
+      const isDisabled = threshold >= 999999
+      setThresholdDisabled(isDisabled)
+      setLowStockThreshold(isDisabled ? '' : threshold.toString())
       const existing = stockItem.tracking_number || ''
       setTrackingNumber(existing)
       
@@ -87,16 +92,25 @@ export function UpdateStockModal({
       } else {
         // Set absolute value mode
         const quantity = parseInt(absoluteQuantity, 10)
-        const threshold = parseInt(lowStockThreshold, 10)
+        // If threshold is disabled, set to a very high number (999999) to effectively disable it
+        // Otherwise, use the entered value or keep existing if empty
+        let threshold: number
+        if (thresholdDisabled) {
+          threshold = 999999 // Effectively disables threshold monitoring
+        } else {
+          const enteredThreshold = lowStockThreshold.trim() === '' 
+            ? stockItem.low_stock_threshold 
+            : parseInt(lowStockThreshold, 10)
+          if (isNaN(enteredThreshold) || enteredThreshold < 0) {
+            setError('Please enter a valid low stock threshold (0 or greater)')
+            setSubmitting(false)
+            return
+          }
+          threshold = enteredThreshold
+        }
 
         if (isNaN(quantity) || quantity < 0) {
           setError('Please enter a valid quantity (0 or greater)')
-          setSubmitting(false)
-          return
-        }
-
-        if (isNaN(threshold) || threshold < 0) {
-          setError('Please enter a valid low stock threshold (0 or greater)')
           setSubmitting(false)
           return
         }
@@ -205,7 +219,9 @@ export function UpdateStockModal({
           </div>
           <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
             Quantity: <strong style={{ color: '#111827' }}>{stockItem.quantity}</strong> • 
-            Threshold: <strong style={{ color: '#111827' }}>{stockItem.low_stock_threshold}</strong>
+            Threshold: <strong style={{ color: '#111827' }}>
+              {stockItem.low_stock_threshold >= 999999 ? 'Disabled' : stockItem.low_stock_threshold}
+            </strong>
           </div>
         </div>
 
@@ -312,27 +328,62 @@ export function UpdateStockModal({
                 />
               </div>
               <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.95rem' }}>
-                  Low Stock Threshold
-                </label>
-                <input
-                  type="number"
-                  value={lowStockThreshold}
-                  onChange={(e) => setLowStockThreshold(e.target.value)}
-                  min="0"
-                  required
-                  disabled={submitting}
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem',
-                    border: '1px solid #ddd',
-                    borderRadius: '6px',
-                    fontSize: '0.95rem',
-                  }}
-                />
-                <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem', margin: 0 }}>
-                  Alert when stock falls below this number
-                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <input
+                    type="checkbox"
+                    id="disable-threshold"
+                    checked={thresholdDisabled}
+                    onChange={(e) => {
+                      setThresholdDisabled(e.target.checked)
+                      if (!e.target.checked && !lowStockThreshold) {
+                        setLowStockThreshold(stockItem.low_stock_threshold >= 999999 ? '5' : stockItem.low_stock_threshold.toString())
+                      }
+                    }}
+                    disabled={submitting}
+                    style={{
+                      width: '18px',
+                      height: '18px',
+                      cursor: submitting ? 'not-allowed' : 'pointer',
+                    }}
+                  />
+                  <label 
+                    htmlFor="disable-threshold"
+                    style={{ 
+                      fontWeight: '600', 
+                      fontSize: '0.95rem',
+                      cursor: submitting ? 'not-allowed' : 'pointer',
+                      userSelect: 'none',
+                    }}
+                  >
+                    Disable Threshold Monitoring
+                  </label>
+                </div>
+                {!thresholdDisabled && (
+                  <>
+                    <input
+                      type="number"
+                      value={lowStockThreshold}
+                      onChange={(e) => setLowStockThreshold(e.target.value)}
+                      min="0"
+                      disabled={submitting}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        border: '1px solid #ddd',
+                        borderRadius: '6px',
+                        fontSize: '0.95rem',
+                      }}
+                    />
+                    <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem', margin: 0 }}>
+                      Alert when stock falls below this number
+                    </p>
+                  </>
+                )}
+                {thresholdDisabled && (
+                  <p style={{ fontSize: '0.85rem', color: '#6b7280', marginTop: '0.25rem', margin: 0, fontStyle: 'italic' }}>
+                    Threshold monitoring is disabled. No low stock alerts will be shown for this item.
+                  </p>
+                )}
               </div>
             </>
           )}

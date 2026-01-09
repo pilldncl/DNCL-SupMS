@@ -36,6 +36,7 @@ export default function StockPage() {
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'low' | 'out'>('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [selectedPartType, setSelectedPartType] = useState<string>('')
   const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [selectedStockItem, setSelectedStockItem] = useState<StockItem | null>(null)
   const [showTrackingModal, setShowTrackingModal] = useState(false)
@@ -301,9 +302,14 @@ export default function StockPage() {
 
   // Filter stock items
   const filteredItems = stockItems.filter(item => {
+    // Filter by stock status (all, low, out)
     if (filter === 'low' && !item.is_low_stock) return false
     if (filter === 'out' && item.quantity > 0) return false
     
+    // Filter by part type
+    if (selectedPartType && item.part_type !== selectedPartType) return false
+    
+    // Filter by search term
     if (searchTerm.trim()) {
       const search = searchTerm.toLowerCase()
       const skuName = item.sku?.sku_code?.toLowerCase() || ''
@@ -487,6 +493,28 @@ export default function StockPage() {
                   }}
                 />
               </div>
+              <div style={{ minWidth: isMobile ? 'auto' : '180px' }}>
+                <select
+                  value={selectedPartType}
+                  onChange={(e) => setSelectedPartType(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem 0.75rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '0.875rem',
+                    backgroundColor: 'white',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="">All Part Types</option>
+                  {partTypes.map(pt => (
+                    <option key={pt.name} value={pt.name}>
+                      {pt.display_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 {(['all', 'low', 'out'] as const).map((filterOption) => (
                   <button
@@ -598,7 +626,11 @@ export default function StockPage() {
                               {item.quantity}
                             </td>
                             <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontSize: '0.875rem', color: '#6b7280' }}>
-                              {item.low_stock_threshold}
+                              {item.low_stock_threshold >= 999999 ? (
+                                <span style={{ fontStyle: 'italic', color: '#9ca3af' }}>Disabled</span>
+                              ) : (
+                                item.low_stock_threshold
+                              )}
                             </td>
                             <td style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}>
                               <span style={{
